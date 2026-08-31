@@ -1,7 +1,20 @@
-# Sprachacus
+<p align="center">
+  <img src="docs/img/icon.png" width="120" alt="Sprachacus">
+</p>
 
-Lokale Diktier-App für macOS 26+ mit KI-Textkorrektur, Schreibassistent und Meeting-Transkription.
-Transkribiert vollständig auf dem Gerät (Apple `SpeechAnalyzer`), ohne Abo-Zwang und ohne Cloud-Upload der Aufnahmen.
+<h1 align="center">Sprachacus</h1>
+
+<p align="center">
+  Lokale Diktier-App für macOS 26+ mit KI-Textkorrektur, Schreibassistent und Meeting-Transkription.<br>
+  Transkribiert vollständig auf dem Gerät — ohne Abo-Zwang und ohne Cloud-Upload der Aufnahmen.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-26%2B-000000?logo=apple&logoColor=white" alt="macOS 26+">
+  <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
+  <img src="https://img.shields.io/badge/Lizenz-GPL--3.0-blue" alt="GPL-3.0">
+  <img src="https://img.shields.io/badge/Abhängigkeiten-keine-brightgreen" alt="keine Abhängigkeiten">
+</p>
 
 > **English:** A local dictation app for macOS 26+. Tap the right ⌥ key, speak, tap again — the text is
 > transcribed on-device, cleaned up by an LLM and pasted where your cursor is. Also does clipboard-aware

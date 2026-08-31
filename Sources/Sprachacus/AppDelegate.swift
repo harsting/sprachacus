@@ -57,9 +57,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if UserDefaults.standard.bool(forKey: "runSystemAudioSpike") {
             Task { await SystemAudioSpike.run() }
         }
-        if let tab = UserDefaults.standard.string(forKey: "openTabOnLaunch") {
-            MainWindowController.shared.show(tab: tab == "meetings" ? .meetings
-                                                : tab == "settings" ? .settings : .history)
+        if UserDefaults.standard.bool(forKey: "showOverlayDemo") {
+            UserDefaults.standard.set(false, forKey: "showOverlayDemo")
+            dictation.overlay.runDemo()
+        }
+        if let target = UserDefaults.standard.string(forKey: "openTabOnLaunch") {
+            if target == "assist" {
+                let instruction = UserDefaults.standard.string(forKey: "assistDemoInstruction") ?? ""
+                AssistPanelController.shared.show(
+                    context: NSPasteboard.general.string(forType: .string),
+                    instruction: instruction,
+                    generateImmediately: !instruction.isEmpty)
+            } else {
+                MainWindowController.shared.show(tab: target == "meetings" ? .meetings
+                                                    : target == "settings" ? .settings : .history)
+            }
         }
     }
 

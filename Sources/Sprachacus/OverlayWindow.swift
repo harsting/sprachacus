@@ -59,6 +59,27 @@ final class OverlayController {
         model.phase = .hidden
     }
 
+    /// Zeigt das Overlay mit synthetischen Pegeln — für Screenshots und zum
+    /// Prüfen der Darstellung, ohne das Mikrofon zu benutzen.
+    func runDemo(phase: OverlayModel.Phase = .recording, duration: TimeInterval = 25) {
+        show(phase: phase)
+        var elapsed: TimeInterval = 0
+        Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { timer in
+            elapsed += 0.07
+            if elapsed >= duration {
+                timer.invalidate()
+                Task { @MainActor in self.hide() }
+                return
+            }
+            // Echte Sprach-RMS-Werte liegen bei ~0,005–0,06; die Anzeige
+            // skaliert mit Faktor 16. Höhere Werte würden nur anschlagen.
+            let t = elapsed * 7
+            let envelope = abs(sin(elapsed * 1.1)) * 0.7 + 0.3   // Sprechpausen
+            let level = Float((abs(sin(t)) * 0.030 + abs(sin(t * 2.7)) * 0.016 + 0.004) * envelope)
+            Task { @MainActor in self.model.pushLevel(level) }
+        }
+    }
+
     /// Show a terminal phase (checkmark/error) briefly, then hide.
     func flash(_ phase: OverlayModel.Phase, duration: TimeInterval = 0.9) {
         show(phase: phase)

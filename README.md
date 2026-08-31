@@ -37,6 +37,27 @@ Ohne beide KI-Optionen funktioniert das reine Diktat weiterhin — der Text wird
 
 **Meetings:** Menü → „Meeting aufzeichnen…“. Sprachacus transkribiert Mikrofon („Ich“) und System-Ton („Andere“) getrennt und live, speichert jeden Abschnitt sofort und fasst nach dem Beenden strukturiert zusammen (TL;DR, Themen, Entscheidungen, Action Items, offene Punkte).
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/img/overlay.png" width="440" alt="Aufnahme-Overlay"><br>
+  <sub>Während des Diktats: Die Wellenform reagiert auf die Stimme — das Overlay nimmt nie den Fokus,<br>du tippst also weiter in der App, in die der Text später landet.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/img/assist.png" width="430" alt="Assist-Fenster">
+  <img src="docs/img/verlauf.png" width="430" alt="Verlauf">
+</p>
+<p align="center">
+  <sub>Links: Assist verfasst aus Zwischenablage plus gesprochener Anweisung einen fertigen Text.<br>
+  Rechts: Der Verlauf zeigt zu jedem Eintrag Roh-Transkript, Ergebnis und das verwendete Modell.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/img/einstellungen.png" width="560" alt="Einstellungen"><br>
+  <sub>Einstellungen: Modellwahl mit Live-Status, dein Name für die Textgenerierung<br>und die frei editierbaren Anweisungen an die KI.</sub>
+</p>
+
 ## Wie es funktioniert
 
 | Baustein | Technik | Kosten |
@@ -173,6 +194,7 @@ Tipp: Als Mikrofon das eingebaute MacBook-Mikro verwenden — AirPods als Mikrof
 defaults write com.marvinharst.sprachacus runSystemAudioSpike -bool YES   # 30-s-Selbsttest beider Kanäle
 open -a Sprachacus && sleep 35 && cat ~/Library/Application\ Support/Sprachacus/spike.log
 defaults write com.marvinharst.sprachacus openTabOnLaunch -string meetings  # Fenster direkt auf einem Tab öffnen
+defaults write com.marvinharst.sprachacus showOverlayDemo -bool YES        # Overlay ohne Aufnahme anzeigen
 ```
 
 Architektur und verifizierte API-Details: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).

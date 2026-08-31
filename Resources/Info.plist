@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Achtung: An der Bundle-ID hängen die TCC-Freigaben (Bedienungshilfen,
+	     Mikrofon), das Login-Item und die UserDefaults. Ändern = alles neu erteilen. -->
+	<key>CFBundleIdentifier</key>
+	<string>com.marvinharst.sprachacus</string>
+	<key>CFBundleName</key>
+	<string>Sprachacus</string>
+	<key>CFBundleDisplayName</key>
+	<string>Sprachacus</string>
+	<key>CFBundleExecutable</key>
+	<string>Sprachacus</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sprachacus nimmt deine Stimme für die Diktierfunktion auf. Die Verarbeitung erfolgt lokal auf deinem Mac.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Sprachacus wandelt deine Sprache lokal in Text um.</string>
+</dict>
+</plist>

@@ -72,6 +72,14 @@ struct MeetingLiveView: View {
                                active: controller.systemAudioActive)
             }
 
+            if controller.echoRisk {
+                Label("Ton läuft über die Lautsprecher — das Mikrofon hört die Gegenseite mit. Kopfhörer aufsetzen oder Echo-Unterdrückung einschalten.",
+                      systemImage: "speaker.wave.2.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let status = controller.statusMessage {
                 Label(status, systemImage: "info.circle")
                     .font(.caption)

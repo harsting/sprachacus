@@ -277,6 +277,9 @@ struct SettingsTab: View {
     @AppStorage("assistPrompt.en") private var assistPromptEn = ""
     @AppStorage("assistProvider") private var assistProviderRaw = AssistProviderChoice.auto.rawValue
     @AppStorage("userName") private var userName = ""
+    @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
+    @AppStorage("meetingEchoCancellation") private var meetingEchoCancellation = true
+    @State private var inputDevices: [AudioDevices.Device] = []
 
     @State private var fmAvailable: Bool?
     @State private var claudePath: String?
@@ -295,6 +298,33 @@ struct SettingsTab: View {
                 Text("Persönliches")
             } footer: {
                 Text("Assist verfasst Texte in deinem Namen, und in Meeting-Zusammenfassungen wird „Ich“ dir zugeordnet. Das Feld darf leer bleiben — dann arbeitet die KI ohne Namen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Picker("Eingang", selection: $inputDeviceUID) {
+                    Text("Systemstandard").tag("")
+                    ForEach(inputDevices) { device in
+                        Text(device.name).tag(device.uid)
+                    }
+                }
+                if !inputDeviceUID.isEmpty, !inputDevices.contains(where: { $0.uid == inputDeviceUID }) {
+                    Label("Das gewählte Mikrofon ist gerade nicht angeschlossen — Sprachacus nutzt so lange den Systemstandard.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                Toggle("Echo-Unterdrückung in Meetings", isOn: $meetingEchoCancellation)
+                HStack {
+                    Spacer()
+                    Button("Geräte neu einlesen") { inputDevices = AudioDevices.inputs() }
+                        .controlSize(.small)
+                }
+            } header: {
+                Text("Mikrofon")
+            } footer: {
+                Text("Legt fest, worüber deine eigene Stimme aufgenommen wird — für Diktat und für den „Ich“-Kanal in Meetings. Die Echo-Unterdrückung verhindert, dass die Gegenseite über die Lautsprecher ins Mikrofon zurückläuft und doppelt im Transkript landet; sie gilt nur für Meetings, nicht fürs Diktat.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -425,6 +455,7 @@ struct SettingsTab: View {
         }
         .formStyle(.grouped)
         .task {
+            inputDevices = AudioDevices.inputs()
             checkAvailability()
             if testInput.isEmpty {
                 testInput = isGerman

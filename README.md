@@ -186,7 +186,9 @@ Beim ersten Meeting fragt Sprachacus die Freigabe **„Bildschirm- & Systemaudio
 
 Meetings liegen unter `~/Library/Application Support/Sprachacus/meetings/<uuid>/` als `meta.json` + `transcript.jsonl`. Jeder Abschnitt wird sofort geschrieben: Ein Absturz nach 90 Minuten kostet höchstens den letzten Satz.
 
-Tipp: Als Mikrofon das eingebaute MacBook-Mikro verwenden — AirPods als Mikrofon schalten die Verbindung auf schlechte Telefonqualität.
+**Mikrofon und Echo:** Unter Einstellungen → Mikrofon lässt sich ein festes Eingabegerät wählen (sonst folgt Sprachacus dem Systemstandard). Wichtig bei Meetings ohne Kopfhörer: Läuft der Ton über die Lautsprecher, hört das Mikrofon die Gegenseite mit und ihre Sätze landen doppelt im Transkript. Dagegen ist die **Echo-Unterdrückung** standardmäßig aktiv (Apples Voice Processing); zusätzlich verwirft Sprachacus Mikrofon-Abschnitte, die einem kurz zuvor gehörten Beitrag der Gegenseite stark ähneln. Das Meeting-Fenster warnt, wenn der Ton über interne Lautsprecher läuft.
+
+Als Mikrofon möglichst nicht die AirPods verwenden — sie schalten die Verbindung dann auf schlechte Telefonqualität.
 
 ## Diagnose
 

@@ -18,6 +18,9 @@ final class MeetingController: ObservableObject {
     @Published private(set) var isSummarizing = false
     @Published private(set) var statusMessage: String?
     @Published private(set) var systemAudioActive = false
+    /// Ton läuft über interne Lautsprecher — das Mikrofon hört die Gegenseite mit.
+    @Published private(set) var echoRisk = false
+    @Published private(set) var inputDeviceName: String?
 
     private var meeting: MeetingMeta?
     private var startedAt = Date()
@@ -82,11 +85,14 @@ final class MeetingController: ObservableObject {
                 recorder.onRestartFailed = { [weak self] _ in
                     Task { @MainActor in self?.statusMessage = "Mikrofon verloren — Meeting beenden und neu starten" }
                 }
-                try recorder.start(onBuffer: { [weak mic] buffer in
-                    mic?.feed(buffer)
-                }, onLevel: { [weak self] level in
-                    Task { @MainActor in self?.micLevel = level }
-                })
+                try recorder.start(
+                    deviceUID: Settings.shared.inputDeviceUID,
+                    echoCancellation: Settings.shared.meetingEchoCancellation,
+                    onBuffer: { [weak mic] buffer in mic?.feed(buffer) },
+                    onLevel: { [weak self] level in
+                        Task { @MainActor in self?.micLevel = level }
+                    })
+                updateEchoRisk()
 
                 capture.onBuffer = { [weak system] buffer in
                     system?.feed(buffer)
@@ -186,15 +192,56 @@ final class MeetingController: ObservableObject {
 
     private func record(_ text: String, from source: MeetingSegment.Source) {
         guard let meeting, !text.isEmpty else { return }
+        let time = Date().timeIntervalSince(startedAt)
+        // Sicherheitsnetz: Läuft der Ton über Lautsprecher, hört das Mikrofon
+        // die Gegenseite mit. Die Echo-Unterdrückung fängt das meist ab; was
+        // durchkommt, würde sonst als eigene Wortmeldung im Transkript stehen.
+        if source == .me, isEchoOfOthers(text, at: time) {
+            NSLog("Meeting: Mikrofon-Segment als Echo verworfen: \(text.prefix(60))")
+            partialMe = ""
+            return
+        }
         let segment = MeetingSegment(source: source,
                                      text: text,
-                                     t: Date().timeIntervalSince(startedAt))
+                                     t: time)
         segments.append(segment)
         switch source {
         case .me: partialMe = ""
         case .others: partialOthers = ""
         }
         MeetingStore.shared.appendSegment(segment, to: meeting.id)
+    }
+
+    /// Vergleicht ein Mikrofon-Segment mit den letzten Beiträgen der Gegenseite.
+    /// Bewusst streng eingestellt: Ein fälschlich verworfener eigener Satz
+    /// wäre schlimmer als ein durchgerutschtes Echo.
+    private func isEchoOfOthers(_ text: String, at time: TimeInterval) -> Bool {
+        let words = Self.words(text)
+        guard words.count >= 5 else { return false }
+        for segment in segments.reversed() where segment.source == .others {
+            guard time - segment.t < 15 else { break }
+            if Self.similarity(words, Self.words(segment.text)) > 0.8 { return true }
+        }
+        return false
+    }
+
+    private static func words(_ text: String) -> Set<String> {
+        Set(text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.count > 2 })
+    }
+
+    /// Dice-Koeffizient — toleriert die üblichen Abweichungen zweier
+    /// Erkennungsläufe desselben Tons.
+    private static func similarity(_ a: Set<String>, _ b: Set<String>) -> Double {
+        guard !a.isEmpty, !b.isEmpty else { return 0 }
+        return 2.0 * Double(a.intersection(b).count) / Double(a.count + b.count)
+    }
+
+    /// Prüft, ob der Ton gerade über interne Lautsprecher läuft.
+    private func updateEchoRisk() {
+        echoRisk = AudioDevices.defaultOutputIsBuiltInSpeaker() && !Settings.shared.meetingEchoCancellation
+        inputDeviceName = Settings.shared.inputDeviceUID.flatMap { AudioDevices.name(forUID: $0) }
     }
 
     /// SCK stops itself on display reconfiguration, screen lock or a revoked
@@ -244,6 +291,8 @@ final class MeetingController: ObservableObject {
             Task { @MainActor in
                 guard let self, self.isRecording else { return }
                 self.elapsed = Date().timeIntervalSince(self.startedAt)
+                // Kopfhörer abgenommen? Dann wechselt macOS auf Lautsprecher.
+                if Int(self.elapsed) % 5 == 0 { self.updateEchoRisk() }
             }
         }
     }

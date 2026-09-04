@@ -53,6 +53,24 @@ final class Settings {
         set { defaults.set(newValue, forKey: "userName") }
     }
 
+    /// UID des Mikrofons für Diktat und Meetings. Leer = Systemstandard.
+    /// Bewusst die UID und nicht die numerische ID: Letztere ändert sich beim
+    /// Neuanstecken des Geräts.
+    var inputDeviceUID: String? {
+        get {
+            let value = defaults.string(forKey: "inputDeviceUID") ?? ""
+            return value.isEmpty ? nil : value
+        }
+        set { defaults.set(newValue ?? "", forKey: "inputDeviceUID") }
+    }
+
+    /// Echo-Unterdrückung während Meetings — verhindert, dass die über
+    /// Lautsprecher wiedergegebene Gegenseite im Mikrofonkanal landet.
+    var meetingEchoCancellation: Bool {
+        get { defaults.object(forKey: "meetingEchoCancellation") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "meetingEchoCancellation") }
+    }
+
     var assistProvider: AssistProviderChoice {
         get { AssistProviderChoice(rawValue: defaults.string(forKey: "assistProvider") ?? "") ?? .auto }
         set { defaults.set(newValue.rawValue, forKey: "assistProvider") }

@@ -22,7 +22,9 @@ install: bundle
 	@pkill -x DIYSpokenly 2>/dev/null || true
 	rm -rf "/Applications/Sprachacus.app" "/Applications/DIY Spokenly.app"
 	cp -R "build/Sprachacus.app" "/Applications/Sprachacus.app"
-	open "/Applications/Sprachacus.app"
+	@# LaunchServices braucht nach dem Ersetzen einen Moment, sonst schlägt `open` mit -600 fehl.
+	@sleep 2
+	@open "/Applications/Sprachacus.app" || echo "Hinweis: Bitte Sprachacus manuell aus /Applications starten."
 
 clean:
 	rm -rf .build build

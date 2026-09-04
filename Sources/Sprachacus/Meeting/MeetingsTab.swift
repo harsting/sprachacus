@@ -113,6 +113,31 @@ struct MeetingDetailView: View {
                 }
                 .controlSize(.small)
 
+                let speakers = store.speakerIDs(for: meeting.id)
+                if !speakers.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Sprecher der Gegenseite")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        ForEach(speakers, id: \.self) { speaker in
+                            HStack(spacing: 8) {
+                                Text(speaker)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.green)
+                                    .frame(width: 80, alignment: .leading)
+                                TextField("Name vergeben", text: nameBinding(for: speaker))
+                                    .textFieldStyle(.roundedBorder)
+                                    .controlSize(.small)
+                            }
+                        }
+                        Text("Namen gelten sofort für Transkript, Export und die nächste Zusammenfassung.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(10)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                }
+
                 if let summary = meeting.summary, !summary.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
@@ -148,10 +173,10 @@ struct MeetingDetailView: View {
                         VStack(alignment: .leading, spacing: 7) {
                             ForEach(segments) { segment in
                                 HStack(alignment: .firstTextBaseline, spacing: 7) {
-                                    Text(segment.source.label)
+                                    Text(meeting.displayName(for: segment.speaker, source: segment.source))
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(segment.source == .me ? Color.blue : Color.green)
-                                        .frame(width: 46, alignment: .leading)
+                                        .frame(width: 80, alignment: .leading)
                                     Text(segment.text)
                                         .font(.system(size: 12))
                                         .textSelection(.enabled)
@@ -172,6 +197,21 @@ struct MeetingDetailView: View {
         } message: {
             Text("„\(meeting.title)“ wird mit Transkript und Zusammenfassung dauerhaft entfernt.")
         }
+    }
+
+    /// Schreibt den vergebenen Namen direkt in die Meeting-Metadaten.
+    private func nameBinding(for speaker: String) -> Binding<String> {
+        Binding(
+            get: { meeting.speakerNames?[speaker] ?? "" },
+            set: { newValue in
+                var updated = meeting
+                var names = updated.speakerNames ?? [:]
+                let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty { names.removeValue(forKey: speaker) } else { names[speaker] = trimmed }
+                updated.speakerNames = names.isEmpty ? nil : names
+                store.update(updated)
+            }
+        )
     }
 
     private func saveTitle() {

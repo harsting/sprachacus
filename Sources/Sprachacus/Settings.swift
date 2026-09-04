@@ -64,6 +64,19 @@ final class Settings {
         set { defaults.set(newValue ?? "", forKey: "inputDeviceUID") }
     }
 
+    /// Sprechertrennung nach dem Meeting („Sprecher 1/2/3“ statt nur „Andere“).
+    var speakerDiarization: Bool {
+        get { defaults.object(forKey: "speakerDiarization") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "speakerDiarization") }
+    }
+
+    /// Mitschnitt der Gegenseite nach der Auswertung behalten. Aus, weil eine
+    /// Stunde rund 55 MB belegt; an, wenn man später neu zuordnen will.
+    var keepMeetingAudio: Bool {
+        get { defaults.bool(forKey: "keepMeetingAudio") }
+        set { defaults.set(newValue, forKey: "keepMeetingAudio") }
+    }
+
     /// Echo-Unterdrückung während Meetings — verhindert, dass die über
     /// Lautsprecher wiedergegebene Gegenseite im Mikrofonkanal landet.
     var meetingEchoCancellation: Bool {

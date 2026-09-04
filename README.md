@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/macOS-26%2B-000000?logo=apple&logoColor=white" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
   <img src="https://img.shields.io/badge/Lizenz-GPL--3.0-blue" alt="GPL-3.0">
-  <img src="https://img.shields.io/badge/Abhängigkeiten-keine-brightgreen" alt="keine Abhängigkeiten">
+  <img src="https://img.shields.io/badge/Verarbeitung-100%25%20lokal-brightgreen" alt="100% lokal">
 </p>
 
 > **English:** A local dictation app for macOS 26+. Tap the right ⌥ key, speak, tap again — the text is
@@ -190,6 +190,22 @@ Meetings liegen unter `~/Library/Application Support/Sprachacus/meetings/<uuid>/
 
 Als Mikrofon möglichst nicht die AirPods verwenden — sie schalten die Verbindung dann auf schlechte Telefonqualität.
 
+## Mehrere Gesprächspartner
+
+Sitzen mehrere Personen im Call, zerlegt Sprachacus nach dem Meeting den Ton der Gegenseite in
+einzelne Sprecher — lokal über [FluidAudio](https://github.com/FluidInference/FluidAudio) (Apache-2.0).
+Aus einem pauschalen „Andere" werden „Sprecher 1", „Sprecher 2" …, die sich im Meetings-Tab benennen
+lassen; die Namen gelten sofort für Transkript, Export und die nächste Zusammenfassung.
+
+Dafür schneidet Sprachacus während der Aufzeichnung den Ton der Gegenseite mit (16 kHz mono,
+rund 55 MB pro Stunde) und löscht ihn nach der Auswertung wieder — abschaltbar in den Einstellungen.
+Die Modelle lädt FluidAudio beim ersten Meeting einmalig herunter und arbeitet danach offline.
+
+**Grenzen:** Die Zuordnung ist gut, aber nicht fehlerfrei. Sprecherwechsel werden auf etwa eine
+Drittelsekunde genau erkannt und wiederkehrende Stimmen zuverlässig wiedererkannt; bei sehr
+ähnlichen Stimmen oder starker Überlappung können zwei Personen zusammenfallen. Auf dem Standard-
+Benchmark für Meetings liegt die Fehlerrate bei rund 20–25 %.
+
 ## Diagnose
 
 ```bash
@@ -197,7 +213,10 @@ defaults write com.marvinharst.sprachacus runSystemAudioSpike -bool YES   # 30-s
 open -a Sprachacus && sleep 35 && cat ~/Library/Application\ Support/Sprachacus/spike.log
 defaults write com.marvinharst.sprachacus openTabOnLaunch -string meetings  # Fenster direkt auf einem Tab öffnen
 defaults write com.marvinharst.sprachacus showOverlayDemo -bool YES        # Overlay ohne Aufnahme anzeigen
+defaults write com.marvinharst.sprachacus diarizerTestFile -string /pfad.wav  # Sprechertrennung an einer Datei prüfen
 ```
+
+Ergebnisse der Sprechertrennung landen in `~/Library/Application Support/Sprachacus/diarizer.log`.
 
 Architektur und verifizierte API-Details: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).
 

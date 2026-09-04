@@ -17,8 +17,23 @@ struct MeetingSegment: Codable, Identifiable, Equatable {
     var id = UUID()
     let source: Source
     let text: String
-    /// Seconds since meeting start (wall clock when the segment was finalized).
+    /// Startzeit auf der Tonspur, in Sekunden seit Aufnahmebeginn.
     let t: TimeInterval
+    /// Endzeit; bei Altbestand nicht vorhanden.
+    var end: TimeInterval?
+    /// Von der Sprechertrennung vergebene Kennung („Sprecher 1“), nur für
+    /// den Kanal der Gegenseite.
+    var speaker: String?
+
+    init(id: UUID = UUID(), source: Source, text: String, t: TimeInterval,
+         end: TimeInterval? = nil, speaker: String? = nil) {
+        self.id = id
+        self.source = source
+        self.text = text
+        self.t = t
+        self.end = end
+        self.speaker = speaker
+    }
 }
 
 struct MeetingMeta: Codable, Identifiable, Equatable {
@@ -29,6 +44,15 @@ struct MeetingMeta: Codable, Identifiable, Equatable {
     var languageCode: String
     var summary: String?
     var summarizerName: String?
+    /// Zuordnung „Sprecher 1“ → vom Nutzer vergebener Name.
+    var speakerNames: [String: String]?
+
+    /// Anzeigename für eine Sprecherkennung.
+    func displayName(for speaker: String?, source: MeetingSegment.Source) -> String {
+        guard source == .others else { return source.label }
+        guard let speaker else { return source.label }
+        return speakerNames?[speaker] ?? speaker
+    }
 }
 
 /// Meetings live in `Application Support/Sprachacus/meetings/<uuid>/`:
@@ -128,9 +152,44 @@ final class MeetingStore: ObservableObject {
     /// Speaker-labelled plain text, the input for the summarizer and the
     /// "Transkript kopieren" button.
     func transcriptText(for id: UUID) -> String {
-        segments(for: id)
-            .map { "\($0.source.label): \($0.text)" }
+        guard let meta = meetings.first(where: { $0.id == id }) else {
+            return segments(for: id).map { "\($0.source.label): \($0.text)" }.joined(separator: "\n")
+        }
+        return transcriptText(for: meta)
+    }
+
+    func transcriptText(for meta: MeetingMeta) -> String {
+        segments(for: meta.id)
+            .map { "\(meta.displayName(for: $0.speaker, source: $0.source)): \($0.text)" }
             .joined(separator: "\n")
+    }
+
+    /// Ersetzt die Transkriptdatei — nach der Sprechertrennung, die allen
+    /// Abschnitten der Gegenseite eine Kennung zuweist.
+    func replaceSegments(_ segments: [MeetingSegment], for id: UUID) {
+        let encoder = JSONEncoder()
+        var data = Data()
+        for segment in segments {
+            guard let line = try? encoder.encode(segment) else { continue }
+            data.append(line)
+            data.append(0x0A)
+        }
+        try? data.write(to: transcriptURL(id), options: .atomic)
+    }
+
+    /// Alle in einem Meeting erkannten Sprecherkennungen, in Reihenfolge des
+    /// ersten Auftretens.
+    func speakerIDs(for id: UUID) -> [String] {
+        var seen: [String] = []
+        for segment in segments(for: id) {
+            if let speaker = segment.speaker, !seen.contains(speaker) { seen.append(speaker) }
+        }
+        return seen
+    }
+
+    /// Pfad des Mitschnitts der Gegenseite (Grundlage der Sprechertrennung).
+    func systemAudioURL(for id: UUID) -> URL {
+        dir(for: id).appendingPathComponent("system-audio.wav")
     }
 
     func markdown(for meta: MeetingMeta) -> String {
@@ -141,7 +200,8 @@ final class MeetingStore: ObservableObject {
         }
         out += "## Transkript\n\n"
         for segment in segments(for: meta.id) {
-            out += "**\(segment.source.label)** (\(Self.timestamp(segment.t))): \(segment.text)\n\n"
+            let name = meta.displayName(for: segment.speaker, source: segment.source)
+            out += "**\(name)** (\(Self.timestamp(segment.t))): \(segment.text)\n\n"
         }
         return out
     }

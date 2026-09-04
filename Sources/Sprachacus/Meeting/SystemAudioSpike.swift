@@ -50,10 +50,10 @@ enum SystemAudioSpike {
         let capture = SystemAudioCapture()
 
         do {
-            try await micTranscriber.start(locale: locale, onPartial: { _ in }, onFinalSegment: { text in
+            try await micTranscriber.start(locale: locale, onPartial: { _ in }, onFinalSegment: { text, _, _ in
                 log("[ICH] \(text)")
             })
-            try await sysTranscriber.start(locale: locale, onPartial: { _ in }, onFinalSegment: { text in
+            try await sysTranscriber.start(locale: locale, onPartial: { _ in }, onFinalSegment: { text, _, _ in
                 log("[ANDERE] \(text)")
             })
 

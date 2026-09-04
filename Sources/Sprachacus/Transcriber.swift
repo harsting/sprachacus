@@ -16,6 +16,11 @@ final class Transcriber {
     private var recognizerTask: Task<String, Error>?
     private var converter: AVAudioConverter?
     private var analyzerFormat: AVAudioFormat?
+    /// Optionaler Mitschnitt exakt in der Analyse-Abtastrate. Dadurch teilen
+    /// Datei und Transkript dieselbe Zeitachse — Voraussetzung dafür, später
+    /// Sprecherabschnitte den Sätzen zuzuordnen.
+    private var recordingFile: AVAudioFile?
+    private let recordingLock = NSLock()
 
     // MARK: - Model management
 
@@ -52,12 +57,15 @@ final class Transcriber {
 
     // MARK: - Session
 
-    /// - Parameter onFinalSegment: fires for every finalized chunk while the
-    ///   session runs (meeting mode appends these live); `finish()` still
-    ///   returns the full text.
+    /// - Parameters:
+    ///   - onFinalSegment: fires for every finalized chunk while the session
+    ///     runs (meeting mode appends these live) together with its position
+    ///     on the audio timeline; `finish()` still returns the full text.
+    ///   - recordTo: schreibt den analysierten Ton zusätzlich als Datei mit.
     func start(locale: Locale,
                onPartial: @escaping (String) -> Void,
-               onFinalSegment: ((String) -> Void)? = nil) async throws {
+               onFinalSegment: ((String, TimeInterval, TimeInterval) -> Void)? = nil,
+               recordTo url: URL? = nil) async throws {
         let transcriber = SpeechTranscriber(locale: locale,
                                             transcriptionOptions: [],
                                             reportingOptions: [.volatileResults],
@@ -67,6 +75,20 @@ final class Transcriber {
         self.analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
         guard analyzerFormat != nil else {
             throw TranscriberError(message: "Kein kompatibles Audioformat gefunden")
+        }
+
+        if let url, let format = analyzerFormat {
+            do {
+                // commonFormat/interleaved mitgeben: Sonst erwartet AVAudioFile
+                // Float32-Puffer, und das Schreiben der Int16-Puffer schlägt
+                // still fehl — die Datei bliebe leer.
+                recordingFile = try AVAudioFile(forWriting: url,
+                                                settings: format.settings,
+                                                commonFormat: format.commonFormat,
+                                                interleaved: format.isInterleaved)
+            } catch {
+                NSLog("Transcriber: Mitschnitt konnte nicht angelegt werden: \(error.localizedDescription)")
+            }
         }
 
         let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
@@ -79,7 +101,10 @@ final class Transcriber {
                 if result.isFinal {
                     finalText += text
                     let segment = Self.normalize(text)
-                    if !segment.isEmpty { onFinalSegment?(segment) }
+                    if !segment.isEmpty {
+                        let range = result.range
+                        onFinalSegment?(segment, range.start.seconds, range.end.seconds)
+                    }
                 } else {
                     onPartial(text)
                 }
@@ -114,6 +139,11 @@ final class Transcriber {
             return buffer
         }
         guard status != .error, out.frameLength > 0 else { return }
+        if let recordingFile {
+            recordingLock.lock()
+            try? recordingFile.write(from: out)
+            recordingLock.unlock()
+        }
         inputBuilder.yield(AnalyzerInput(buffer: out))
     }
 
@@ -140,6 +170,9 @@ final class Transcriber {
         recognizerTask = nil
         converter = nil
         analyzerFormat = nil
+        recordingLock.lock()
+        recordingFile = nil
+        recordingLock.unlock()
     }
 
     static func normalize(_ text: String) -> String {

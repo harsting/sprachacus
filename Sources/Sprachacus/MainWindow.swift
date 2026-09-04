@@ -279,6 +279,8 @@ struct SettingsTab: View {
     @AppStorage("userName") private var userName = ""
     @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
     @AppStorage("meetingEchoCancellation") private var meetingEchoCancellation = true
+    @AppStorage("speakerDiarization") private var speakerDiarization = true
+    @AppStorage("keepMeetingAudio") private var keepMeetingAudio = false
     @State private var inputDevices: [AudioDevices.Device] = []
 
     @State private var fmAvailable: Bool?
@@ -325,6 +327,18 @@ struct SettingsTab: View {
                 Text("Mikrofon")
             } footer: {
                 Text("Legt fest, worüber deine eigene Stimme aufgenommen wird — für Diktat und für den „Ich“-Kanal in Meetings. Die Echo-Unterdrückung verhindert, dass die Gegenseite über die Lautsprecher ins Mikrofon zurückläuft und doppelt im Transkript landet; sie gilt nur für Meetings, nicht fürs Diktat.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Sprecher der Gegenseite unterscheiden", isOn: $speakerDiarization)
+                Toggle("Mitschnitt nach der Auswertung behalten", isOn: $keepMeetingAudio)
+                    .disabled(!speakerDiarization)
+            } header: {
+                Text("Meetings")
+            } footer: {
+                Text("Sitzen mehrere Personen im Call, zerlegt Sprachacus nach dem Meeting den Ton der Gegenseite in „Sprecher 1“, „Sprecher 2“ … , die du im Meetings-Tab benennen kannst. Das läuft lokal; die nötigen Modelle lädt die App beim ersten Mal einmalig herunter. Die Zuordnung ist gut, aber nicht fehlerfrei — bei ähnlichen Stimmen oder starker Überlappung kann sie danebenliegen. Der Mitschnitt (rund 55 MB pro Stunde) wird danach normalerweise gelöscht.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

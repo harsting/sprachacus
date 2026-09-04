@@ -69,14 +69,16 @@ final class MeetingController: ObservableObject {
 
                 try await mic.start(locale: locale, onPartial: { [weak self] text in
                     Task { @MainActor in self?.partialMe = text }
-                }, onFinalSegment: { [weak self] text in
-                    Task { @MainActor in self?.record(text, from: .me) }
+                }, onFinalSegment: { [weak self] text, start, end in
+                    Task { @MainActor in self?.record(text, from: .me, start: start, end: end) }
                 })
+                // Der Mitschnitt der Gegenseite ist die Grundlage der
+                // Sprechertrennung nach dem Meeting.
                 try await system.start(locale: locale, onPartial: { [weak self] text in
                     Task { @MainActor in self?.partialOthers = text }
-                }, onFinalSegment: { [weak self] text in
-                    Task { @MainActor in self?.record(text, from: .others) }
-                })
+                }, onFinalSegment: { [weak self] text, start, end in
+                    Task { @MainActor in self?.record(text, from: .others, start: start, end: end) }
+                }, recordTo: MeetingStore.shared.systemAudioURL(for: meeting.id))
                 guard isRecording else {
                     mic.cancel(); system.cancel()
                     return
@@ -154,9 +156,32 @@ final class MeetingController: ObservableObject {
                 return
             }
 
+            // Sprechertrennung: Der Mitschnitt der Gegenseite wird in
+            // Sprecherabschnitte zerlegt und den Sätzen zugeordnet. Schlägt
+            // das fehl, bleibt das Transkript unverändert erhalten.
+            if Settings.shared.speakerDiarization {
+                do {
+                    let stored = MeetingStore.shared.segments(for: meeting.id)
+                    let assigned = try await SpeakerDiarizer.assignSpeakers(
+                        to: stored,
+                        audioURL: MeetingStore.shared.systemAudioURL(for: meeting.id),
+                        onProgress: { [weak self] text in
+                            Task { @MainActor in self?.statusMessage = text }
+                        })
+                    MeetingStore.shared.replaceSegments(assigned, for: meeting.id)
+                } catch {
+                    NSLog("Sprechertrennung fehlgeschlagen: \(error.localizedDescription)")
+                    statusMessage = "Sprechertrennung nicht möglich — Transkript bleibt erhalten"
+                }
+                if !Settings.shared.keepMeetingAudio {
+                    try? FileManager.default.removeItem(at: MeetingStore.shared.systemAudioURL(for: meeting.id))
+                }
+            }
+
             statusMessage = "Fasse zusammen…"
+            let finalTranscript = MeetingStore.shared.transcriptText(for: updated)
             do {
-                let summary = try await MeetingSummarizer.summarize(transcript: transcript,
+                let summary = try await MeetingSummarizer.summarize(transcript: finalTranscript,
                                                                     languageCode: updated.languageCode)
                 updated.summary = summary.text
                 updated.summarizerName = summary.providerName
@@ -190,9 +215,12 @@ final class MeetingController: ObservableObject {
 
     // MARK: - Internals
 
-    private func record(_ text: String, from source: MeetingSegment.Source) {
+    private func record(_ text: String, from source: MeetingSegment.Source,
+                        start: TimeInterval, end: TimeInterval) {
         guard let meeting, !text.isEmpty else { return }
-        let time = Date().timeIntervalSince(startedAt)
+        // Zeitachse der Tonspur, nicht Wanduhr — nur so passen Transkript und
+        // Sprechertrennung zusammen.
+        let time = start.isFinite ? start : Date().timeIntervalSince(startedAt)
         // Sicherheitsnetz: Läuft der Ton über Lautsprecher, hört das Mikrofon
         // die Gegenseite mit. Die Echo-Unterdrückung fängt das meist ab; was
         // durchkommt, würde sonst als eigene Wortmeldung im Transkript stehen.
@@ -203,7 +231,8 @@ final class MeetingController: ObservableObject {
         }
         let segment = MeetingSegment(source: source,
                                      text: text,
-                                     t: time)
+                                     t: time,
+                                     end: end.isFinite ? end : nil)
         segments.append(segment)
         switch source {
         case .me: partialMe = ""

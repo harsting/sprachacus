@@ -34,6 +34,8 @@ final class DictationController {
     private var transcriber = Transcriber()
     private let paster = Paster()
     private var activity: NSObjectProtocol?
+    /// Laufende Verarbeitung, damit sie sich abbrechen lässt.
+    private var pipelineTask: Task<Void, Never>?
 
     var locale: Locale { Locale(identifier: Settings.shared.localeIdentifier) }
 
@@ -54,12 +56,23 @@ final class DictationController {
         }
     }
 
+    /// Bricht Aufnahme oder Verarbeitung ab. Während der Verarbeitung ist das
+    /// die Rettungsleine, falls die Erkennung einmal nicht zurückkommt.
     func cancel() {
-        guard state == .recording else { return }
-        recorder.stop()
-        transcriber.cancel()
-        endActivity()
-        overlay.hide()
+        switch state {
+        case .idle:
+            return
+        case .recording:
+            recorder.stop()
+            transcriber.cancel()
+            endActivity()
+            overlay.hide()
+        case .processing:
+            pipelineTask?.cancel()
+            transcriber.cancel()
+            overlay.flash(.error("Abgebrochen"), duration: 1.0)
+        }
+        pipelineTask = nil
         mode = .dictation
         state = .idle
     }
@@ -135,9 +148,24 @@ final class DictationController {
         let transcriber = self.transcriber
         let languageCode = Settings.shared.localeIdentifier
 
-        Task { @MainActor in
+        // Letzte Rückfallebene: Sollte irgendein Schritt trotz eigener
+        // Zeitlimits hängen, bricht die Verarbeitung von selbst ab, statt die
+        // App unbedienbar zu lassen.
+        let watchdog = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 90_000_000_000)
+            guard let self, !Task.isCancelled, self.state == .processing else { return }
+            NSLog("Dictation: Verarbeitung nach 90 s abgebrochen")
+            self.overlay.flash(.error("Verarbeitung abgebrochen"), duration: 2.0)
+            self.cancel()
+        }
+
+        pipelineTask = Task { @MainActor in
+            defer { watchdog.cancel() }
             do {
                 let raw = try await transcriber.finish()
+                // Nach jedem längeren Schritt prüfen, ob der Nutzer abgebrochen
+                // hat — sonst würde noch eingefügt, was er verworfen hat.
+                guard !Task.isCancelled, self.state == .processing else { return }
                 guard !raw.isEmpty else {
                     self.overlay.flash(.error("Nichts verstanden"), duration: 1.2)
                     self.finishToIdle()
@@ -147,12 +175,14 @@ final class DictationController {
                 case .dictation:
                     self.overlay.setPhase(.processing("Optimiere…"))
                     let (refined, refinerName) = await RefinerChain.current().refine(raw, languageCode: languageCode)
+                    guard !Task.isCancelled, self.state == .processing else { return }
                     NSLog("Refined via \(refinerName): \(refined.prefix(80))")
                     HistoryStore.shared.add(raw: raw, refined: refined,
                                             refinerName: refinerName, languageCode: languageCode)
                     self.paster.paste(refined)
                     self.overlay.flash(.success)
                 case .assist(let context):
+                    guard !Task.isCancelled, self.state == .processing else { return }
                     // The panel takes over from here — it shows its own progress.
                     self.overlay.hide()
                     AssistPanelController.shared.show(context: context,
@@ -163,11 +193,12 @@ final class DictationController {
                 NSLog("stopAndProcess failed: \(error)")
                 self.overlay.flash(.error("Transkription fehlgeschlagen"), duration: 2.0)
             }
-            self.finishToIdle()
+            if self.state == .processing { self.finishToIdle() }
         }
     }
 
     private func finishToIdle() {
+        pipelineTask = nil
         mode = .dictation
         state = .idle
     }

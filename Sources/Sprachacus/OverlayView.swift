@@ -65,9 +65,15 @@ struct OverlayView: View {
                 .fixedSize()
             case .processing(let status):
                 PulsingDots()
-                Text(status)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(status)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                    Text("esc bricht ab")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                .fixedSize()
             case .downloading(let progress):
                 ProgressView(value: max(0, min(1, progress)))
                     .progressViewStyle(.linear)

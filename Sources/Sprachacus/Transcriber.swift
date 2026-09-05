@@ -21,6 +21,13 @@ final class Transcriber {
     /// Sprecherabschnitte den Sätzen zuzuordnen.
     private var recordingFile: AVAudioFile?
     private let recordingLock = NSLock()
+    /// Bisher erkannter Text, auch von außen lesbar — damit ein abgebrochener
+    /// Abschluss noch liefert, was bereits verstanden wurde.
+    private let textLock = NSLock()
+    private var collectedText = ""
+    /// Ob überhaupt Ton eingespeist wurde. Ohne Ton hat der Analyzer nichts zu
+    /// finalisieren und der Abschluss kann endlos warten.
+    private var fedFrames: UInt64 = 0
 
     // MARK: - Model management
 
@@ -100,6 +107,9 @@ final class Transcriber {
                 let text = String(result.text.characters)
                 if result.isFinal {
                     finalText += text
+                    self.textLock.lock()
+                    self.collectedText = finalText
+                    self.textLock.unlock()
                     let segment = Self.normalize(text)
                     if !segment.isEmpty {
                         let range = result.range
@@ -139,6 +149,7 @@ final class Transcriber {
             return buffer
         }
         guard status != .error, out.frameLength > 0 else { return }
+        fedFrames += UInt64(out.frameLength)
         if let recordingFile {
             recordingLock.lock()
             try? recordingFile.write(from: out)
@@ -148,10 +159,45 @@ final class Transcriber {
     }
 
     /// Stops input, flushes the analyzer and returns the final transcript.
-    func finish() async throws -> String {
+    ///
+    /// Der Abschluss läuft gegen ein Zeitlimit: Bleibt der Analyzer hängen —
+    /// etwa wenn gar nicht gesprochen wurde —, wird er abgebrochen und das
+    /// bis dahin Erkannte zurückgegeben, statt endlos zu warten.
+    func finish(timeout: TimeInterval = 12) async throws -> String {
         inputBuilder?.finish()
-        try await analyzer?.finalizeAndFinishThroughEndOfInput()
-        let text = try await recognizerTask?.value ?? ""
+        let analyzer = self.analyzer
+        let task = self.recognizerTask
+
+        guard fedFrames > 0 else {
+            task?.cancel()
+            await analyzer?.cancelAndFinishNow()
+            cleanup()
+            return ""
+        }
+
+        let completed = await withTaskGroup(of: Bool.self) { group in
+            group.addTask {
+                try? await analyzer?.finalizeAndFinishThroughEndOfInput()
+                _ = try? await task?.value
+                return true
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+
+        if !completed {
+            NSLog("Transcriber: Abschluss nach \(Int(timeout)) s abgebrochen — liefere bisher Erkanntes")
+            task?.cancel()
+            await analyzer?.cancelAndFinishNow()
+        }
+        textLock.lock()
+        let text = collectedText
+        textLock.unlock()
         cleanup()
         return Self.normalize(text)
     }
@@ -170,6 +216,7 @@ final class Transcriber {
         recognizerTask = nil
         converter = nil
         analyzerFormat = nil
+        fedFrames = 0
         recordingLock.lock()
         recordingFile = nil
         recordingLock.unlock()

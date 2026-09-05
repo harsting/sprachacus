@@ -31,7 +31,7 @@
 Ohne beide KI-Optionen funktioniert das reine Diktat weiterhin — der Text wird dann unkorrigiert eingefügt.
 `make setup` prüft all das und sagt, was fehlt.
 
-**Diktat:** Rechte ⌥ (Option) drücken → sprechen (Overlay mit Waveform am unteren Bildschirmrand) → rechte ⌥ erneut drücken → Text wird lokal transkribiert, per KI optimiert und an der Cursorposition eingefügt. `Esc` bricht die Aufnahme ab.
+**Diktat:** Rechte ⌥ (Option) drücken → sprechen (Overlay mit Waveform am unteren Bildschirmrand) → rechte ⌥ erneut drücken → Text wird lokal transkribiert, per KI optimiert und an der Cursorposition eingefügt. **`Esc` bricht jederzeit ab** — auch während der Verarbeitung, ebenso über das Menüleisten-Symbol.
 
 **Assist:** Text kopieren (⌘C) → rechte ⌥ **zweimal schnell** tippen → Anweisung sprechen („antworte freundlich, dass ich erst ab 15 Uhr kann“) → rechte ⌥ → ein Fenster zeigt den fertigen Text zum Prüfen, Bearbeiten und Einfügen. Ohne Sprache geht es über „Assist öffnen…“ im Menü.
 
@@ -178,6 +178,7 @@ Sources/Sprachacus/
 
 - **Hotkey reagiert nicht:** Bedienungshilfen-Freigabe prüfen (Menü → „Berechtigungen prüfen…"). Nach einem Rebuild ohne `make setup-signing` (Ad-hoc-Signatur) geht die Freigabe verloren — Zertifikat einrichten, App in den Systemeinstellungen einmal aus- und wieder einschalten.
 - **Kein Text eingefügt:** In Passwortfeldern (Secure Input) blockiert macOS simulierte Eingaben — gewollt.
+- **Verarbeitung dauert ungewöhnlich lange:** `Esc` drücken oder im Menü „Verarbeitung abbrechen". Sprachacus bricht zusätzlich von selbst ab: die Spracherkennung nach 12 Sekunden, die gesamte Verarbeitung nach 90 Sekunden. Wurde gar nicht gesprochen, endet der Vorgang sofort.
 - **Optimierung langsam:** Apple Intelligence aktivieren (lokal, ~1 s) statt Claude CLI (~3–6 s).
 
 ## Meetings einrichten

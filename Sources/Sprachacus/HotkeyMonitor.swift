@@ -8,7 +8,9 @@ import AppKit
 final class HotkeyMonitor {
     var onToggle: (() -> Void)?
     var onCancel: (() -> Void)?
-    var isRecordingProvider: () -> Bool = { false }
+    /// Ob Sprachacus gerade beschäftigt ist (Aufnahme ODER Verarbeitung) —
+    /// nur dann wird Escape als Abbruch weitergereicht.
+    var isBusyProvider: () -> Bool = { false }
 
     private static let rightOptionKeyCode: UInt16 = 61
     private static let escapeKeyCode: UInt16 = 53
@@ -69,7 +71,7 @@ final class HotkeyMonitor {
 
     private func handleKeyDown(_ event: NSEvent) {
         if rightOptionDown { usedAsModifier = true }
-        if event.keyCode == Self.escapeKeyCode, isRecordingProvider() {
+        if event.keyCode == Self.escapeKeyCode, isBusyProvider() {
             DispatchQueue.main.async { self.onCancel?() }
         }
     }

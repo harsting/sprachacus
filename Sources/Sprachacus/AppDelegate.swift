@@ -37,7 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.dictation.toggle()
         }
         hotkey.onCancel = { [weak self] in self?.dictation.cancel() }
-        hotkey.isRecordingProvider = { [weak self] in self?.dictation.state == .recording }
+        hotkey.isBusyProvider = { [weak self] in
+            guard let state = self?.dictation.state else { return false }
+            return state == .recording || state == .processing
+        }
 
         // Autostart: keep the login item registered — and its path current,
         // e.g. after the app was renamed or moved — unless the user disabled it.
@@ -203,6 +206,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         assistItem.target = self
         menu.addItem(assistItem)
 
+        if dictation.state != .idle {
+            let abortItem = NSMenuItem(title: dictation.state == .recording
+                                        ? "Aufnahme abbrechen (esc)"
+                                        : "Verarbeitung abbrechen (esc)",
+                                       action: #selector(abortDictation), keyEquivalent: "")
+            abortItem.target = self
+            menu.addItem(abortItem)
+            menu.addItem(.separator())
+        }
+
         let recording = MeetingController.shared.isRecording
         let meetingItem = NSMenuItem(
             title: recording ? "Meeting beenden & zusammenfassen" : "Meeting aufzeichnen…",
@@ -317,6 +330,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openMainWindow() {
         MainWindowController.shared.show()
+    }
+
+    @objc private func abortDictation() {
+        dictation.cancel()
     }
 
     @objc private func toggleMeeting() {

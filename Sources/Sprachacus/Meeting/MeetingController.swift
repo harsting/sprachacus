@@ -89,7 +89,6 @@ final class MeetingController: ObservableObject {
                 }
                 try recorder.start(
                     deviceUID: Settings.shared.inputDeviceUID,
-                    echoCancellation: Settings.shared.meetingEchoCancellation,
                     onBuffer: { [weak mic] buffer in mic?.feed(buffer) },
                     onLevel: { [weak self] level in
                         Task { @MainActor in self?.micLevel = level }
@@ -269,7 +268,7 @@ final class MeetingController: ObservableObject {
 
     /// Prüft, ob der Ton gerade über interne Lautsprecher läuft.
     private func updateEchoRisk() {
-        echoRisk = AudioDevices.defaultOutputIsBuiltInSpeaker() && !Settings.shared.meetingEchoCancellation
+        echoRisk = AudioDevices.defaultOutputIsBuiltInSpeaker()
         inputDeviceName = Settings.shared.inputDeviceUID.flatMap { AudioDevices.name(forUID: $0) }
     }
 

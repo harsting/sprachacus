@@ -77,12 +77,6 @@ final class Settings {
         set { defaults.set(newValue, forKey: "keepMeetingAudio") }
     }
 
-    /// Echo-Unterdrückung während Meetings — verhindert, dass die über
-    /// Lautsprecher wiedergegebene Gegenseite im Mikrofonkanal landet.
-    var meetingEchoCancellation: Bool {
-        get { defaults.object(forKey: "meetingEchoCancellation") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "meetingEchoCancellation") }
-    }
 
     var assistProvider: AssistProviderChoice {
         get { AssistProviderChoice(rawValue: defaults.string(forKey: "assistProvider") ?? "") ?? .auto }

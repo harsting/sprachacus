@@ -73,7 +73,7 @@ struct MeetingLiveView: View {
             }
 
             if controller.echoRisk {
-                Label("Ton läuft über die Lautsprecher — das Mikrofon hört die Gegenseite mit. Kopfhörer aufsetzen oder Echo-Unterdrückung einschalten.",
+                Label("Ton läuft über die Lautsprecher — das Mikrofon hört die Gegenseite mit. Für ein sauberes Transkript besser Kopfhörer aufsetzen.",
                       systemImage: "speaker.wave.2.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)

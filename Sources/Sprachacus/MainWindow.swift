@@ -278,7 +278,6 @@ struct SettingsTab: View {
     @AppStorage("assistProvider") private var assistProviderRaw = AssistProviderChoice.auto.rawValue
     @AppStorage("userName") private var userName = ""
     @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
-    @AppStorage("meetingEchoCancellation") private var meetingEchoCancellation = true
     @AppStorage("speakerDiarization") private var speakerDiarization = true
     @AppStorage("keepMeetingAudio") private var keepMeetingAudio = false
     @State private var inputDevices: [AudioDevices.Device] = []
@@ -317,7 +316,6 @@ struct SettingsTab: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
-                Toggle("Echo-Unterdrückung in Meetings", isOn: $meetingEchoCancellation)
                 HStack {
                     Spacer()
                     Button("Geräte neu einlesen") { inputDevices = AudioDevices.inputs() }
@@ -326,7 +324,7 @@ struct SettingsTab: View {
             } header: {
                 Text("Mikrofon")
             } footer: {
-                Text("Legt fest, worüber deine eigene Stimme aufgenommen wird — für Diktat und für den „Ich“-Kanal in Meetings. Die Echo-Unterdrückung verhindert, dass die Gegenseite über die Lautsprecher ins Mikrofon zurückläuft und doppelt im Transkript landet; sie gilt nur für Meetings, nicht fürs Diktat.")
+                Text("Legt fest, worüber deine eigene Stimme aufgenommen wird — für Diktat und für den „Ich“-Kanal in Meetings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

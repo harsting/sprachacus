@@ -187,7 +187,9 @@ Beim ersten Meeting fragt Sprachacus die Freigabe **„Bildschirm- & Systemaudio
 
 Meetings liegen unter `~/Library/Application Support/Sprachacus/meetings/<uuid>/` als `meta.json` + `transcript.jsonl`. Jeder Abschnitt wird sofort geschrieben: Ein Absturz nach 90 Minuten kostet höchstens den letzten Satz.
 
-**Mikrofon und Echo:** Unter Einstellungen → Mikrofon lässt sich ein festes Eingabegerät wählen (sonst folgt Sprachacus dem Systemstandard). Wichtig bei Meetings ohne Kopfhörer: Läuft der Ton über die Lautsprecher, hört das Mikrofon die Gegenseite mit und ihre Sätze landen doppelt im Transkript. Dagegen ist die **Echo-Unterdrückung** standardmäßig aktiv (Apples Voice Processing); zusätzlich verwirft Sprachacus Mikrofon-Abschnitte, die einem kurz zuvor gehörten Beitrag der Gegenseite stark ähneln. Das Meeting-Fenster warnt, wenn der Ton über interne Lautsprecher läuft.
+**Mikrofon und Echo:** Unter Einstellungen → Mikrofon lässt sich ein festes Eingabegerät wählen (sonst folgt Sprachacus dem Systemstandard). Wichtig bei Meetings ohne Kopfhörer: Läuft der Ton über die Lautsprecher, hört das Mikrofon die Gegenseite mit und ihre Sätze landen doppelt im Transkript. Sprachacus verwirft deshalb Mikrofon-Abschnitte, die einem kurz zuvor gehörten Beitrag der Gegenseite stark ähneln, und das Meeting-Fenster warnt, wenn der Ton über interne Lautsprecher läuft. Für ein sauberes Transkript sind Kopfhörer die zuverlässigste Lösung.
+
+**Warum keine Echo-Unterdrückung:** Apples Voice Processing (`setVoiceProcessingEnabled`) läge nahe, ist hier aber unbrauchbar: Gemessen schaltet es das systemweite Ausgabegerät um und senkt den Ton anderer Apps auf null — mitten im Meeting hört man die Gegenseite dann nicht mehr. Sprachacus fasst die Audio-Ausgabe deshalb grundsätzlich nicht an. Der Regressionstest dazu steckt in `AudioSafetyTest`.
 
 Als Mikrofon möglichst nicht die AirPods verwenden — sie schalten die Verbindung dann auf schlechte Telefonqualität.
 
@@ -215,6 +217,7 @@ open -a Sprachacus && sleep 35 && cat ~/Library/Application\ Support/Sprachacus/
 defaults write com.marvinharst.sprachacus openTabOnLaunch -string meetings  # Fenster direkt auf einem Tab öffnen
 defaults write com.marvinharst.sprachacus showOverlayDemo -bool YES        # Overlay ohne Aufnahme anzeigen
 defaults write com.marvinharst.sprachacus diarizerTestFile -string /pfad.wav  # Sprechertrennung an einer Datei prüfen
+defaults write com.marvinharst.sprachacus runAudioSafetyTest -bool YES     # prüft, ob die Aufnahme die Wiedergabe stört
 ```
 
 Ergebnisse der Sprechertrennung landen in `~/Library/Application Support/Sprachacus/diarizer.log`.

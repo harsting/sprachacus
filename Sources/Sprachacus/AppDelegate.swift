@@ -63,6 +63,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let path = UserDefaults.standard.string(forKey: "diarizerTestFile") {
             Task { await DiarizerSelfTest.run(path: path) }
         }
+        if UserDefaults.standard.bool(forKey: "runAudioSafetyTest") {
+            Task { await AudioSafetyTest.run() }
+        }
         if UserDefaults.standard.bool(forKey: "showOverlayDemo") {
             UserDefaults.standard.set(false, forKey: "showOverlayDemo")
             dictation.overlay.runDemo()

@@ -1,0 +1,22 @@
+name: Idee oder Wunsch
+description: Vorschlag für eine Funktion oder Verbesserung
+labels: ["idee"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Welches Problem soll gelöst werden?
+      description: Beschreibe die Situation, nicht schon die Lösung — oft gibt es einen einfacheren Weg.
+    validations:
+      required: true
+
+  - type: textarea
+    id: vorschlag
+    attributes:
+      label: Wie stellst du dir das vor?
+  - type: checkboxes
+    id: umfang
+    attributes:
+      label: Hinweis
+      options:
+        - label: Mir ist klar, dass Sprachacus bewusst schlank bleibt und nicht jede Idee umgesetzt wird.

@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: swift build (macOS 26)
+    # Sprachacus nutzt SpeechAnalyzer und FoundationModels — beides gibt es
+    # erst ab macOS 26, ältere Läufer scheitern schon beim Übersetzen.
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Werkzeuge anzeigen
+        run: |
+          swift --version
+          echo "SDK: $(xcrun --show-sdk-version)"
+
+      - name: Abhängigkeiten zwischenspeichern
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Bauen
+        run: swift build -c release

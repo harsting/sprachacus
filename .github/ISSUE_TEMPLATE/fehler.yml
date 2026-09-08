@@ -1,0 +1,72 @@
+name: Fehler melden
+description: Etwas funktioniert nicht wie erwartet
+labels: ["fehler"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Melden. English reports are welcome too.
+
+  - type: textarea
+    id: was-passiert
+    attributes:
+      label: Was passiert?
+      description: Was hast du erwartet, und was ist stattdessen passiert?
+      placeholder: Nach dem zweiten Druck auf die rechte Optionstaste …
+    validations:
+      required: true
+
+  - type: textarea
+    id: schritte
+    attributes:
+      label: Schritte zum Nachstellen
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bereich
+    attributes:
+      label: Betroffener Bereich
+      options:
+        - Diktat (rechte Optionstaste)
+        - Assist (Optionstaste doppelt)
+        - Meeting-Aufzeichnung
+        - Sprechertrennung
+        - Einstellungen / Fenster
+        - Einrichtung, Build oder Berechtigungen
+        - Sonstiges
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS-Version
+      placeholder: "26.6.2 (Apple Silicon)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ki
+    attributes:
+      label: Welche KI ist eingestellt?
+      options:
+        - Apple Intelligence (lokal)
+        - Claude CLI
+        - Automatisch
+        - Aus / weiß nicht
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Protokollausgabe (optional)
+      description: |
+        Hilfreich bei Ton- und Meeting-Problemen. Im Terminal ausführen und die Ausgabe hier einfügen:
+        `log show --last 10m --predicate 'process == "Sprachacus"' --style compact | tail -40`
+      render: shell

@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/harsting/sprachacus/actions/workflows/build.yml"><img src="https://github.com/harsting/sprachacus/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <img src="https://img.shields.io/badge/macOS-26%2B-000000?logo=apple&logoColor=white" alt="macOS 26+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
   <img src="https://img.shields.io/badge/Lizenz-GPL--3.0-blue" alt="GPL-3.0">

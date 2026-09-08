@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Hält FluidAudio (Sprechertrennung) aktuell.
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "Abhängigkeit"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

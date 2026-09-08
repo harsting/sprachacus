@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprachacus — lokale Diktier-App für macOS</title>
+<meta name="description" content="Diktieren, Texte verfassen und Meetings transkribieren auf dem Mac. Spracherkennung läuft vollständig auf dem Gerät.">
+<meta property="og:title" content="Sprachacus">
+<meta property="og:description" content="Lokale Diktier-App für macOS 26+ mit KI-Textkorrektur, Schreibassistent und Meeting-Transkription.">
+<meta property="og:image" content="https://harsting.github.io/sprachacus/img/icon.png">
+<link rel="icon" href="img/icon.png">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f4f6fa;
+    --text: #14181f;
+    --muted: #5b6472;
+    --line: #e2e6ee;
+    --accent: #1668e3;
+    --accent-soft: #e8f0fe;
+    --card: #ffffff;
+    --shadow: 0 1px 3px rgba(16, 24, 40, .06), 0 8px 24px rgba(16, 24, 40, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1117;
+      --bg-soft: #151a22;
+      --text: #e8ecf3;
+      --muted: #9aa4b2;
+      --line: #232a35;
+      --accent: #5aa2ff;
+      --accent-soft: #16243a;
+      --card: #151a22;
+      --shadow: 0 1px 3px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); }
+
+  header { text-align: center; padding: 72px 0 56px; }
+  header img.icon { width: 104px; height: 104px; border-radius: 23%; box-shadow: var(--shadow); }
+  h1 { font-size: 44px; letter-spacing: -.02em; margin: 22px 0 10px; }
+  .tagline { font-size: 19px; color: var(--muted); max-width: 620px; margin: 0 auto 8px; }
+  .en { font-size: 14px; color: var(--muted); max-width: 620px; margin: 18px auto 0; opacity: .85; }
+  .badges { margin-top: 22px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .cta { margin-top: 28px; }
+  .button {
+    display: inline-block; text-decoration: none; font-weight: 600; font-size: 15px;
+    padding: 12px 22px; border-radius: 10px; background: var(--accent); color: #fff;
+  }
+  .button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); margin-left: 8px; }
+
+  section { padding: 44px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 24px; letter-spacing: -.01em; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+
+  .modes { display: grid; gap: 18px; grid-template-columns: repeat(3, 1fr); }
+  .mode {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .mode h3 { margin: 0 0 6px; font-size: 17px; }
+  .mode p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .key {
+    display: inline-block; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 4px 7px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg-soft); margin-bottom: 12px;
+  }
+
+  figure { margin: 0 0 30px; }
+  figure img {
+    max-width: 100%; height: auto; display: block; margin: 0 auto;
+    border-radius: 12px; box-shadow: var(--shadow);
+  }
+  figcaption { text-align: center; color: var(--muted); font-size: 13.5px; margin-top: 12px; }
+  .pair { display: grid; gap: 22px; grid-template-columns: 1fr 1fr; align-items: start; }
+
+  .facts { display: grid; gap: 14px; grid-template-columns: repeat(2, 1fr); margin-top: 8px; }
+  .fact { background: var(--bg-soft); border-radius: 12px; padding: 16px 18px; }
+  .fact strong { display: block; font-size: 14px; margin-bottom: 3px; }
+  .fact span { color: var(--muted); font-size: 14px; }
+
+  pre {
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto;
+    font: 13.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  ol { padding-left: 20px; } ol li { margin-bottom: 6px; }
+
+  footer { padding: 40px 0 64px; color: var(--muted); font-size: 14px; text-align: center; border-top: 1px solid var(--line); }
+
+  @media (max-width: 760px) {
+    header { padding: 52px 0 40px; }
+    h1 { font-size: 34px; }
+    .modes, .pair, .facts { grid-template-columns: 1fr; }
+    .button.secondary { margin: 10px 0 0; display: block; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <img class="icon" src="img/icon.png" alt="Sprachacus">
+    <h1>Sprachacus</h1>
+    <p class="tagline">
+      Diktieren, Texte verfassen und Meetings mitschreiben — auf dem Mac,
+      ohne Abo und ohne dass deine Aufnahmen das Gerät verlassen.
+    </p>
+    <div class="badges">
+      <span class="badge">macOS 26+</span>
+      <span class="badge">Apple Silicon</span>
+      <span class="badge">Swift 6</span>
+      <span class="badge">GPL-3.0</span>
+    </div>
+    <div class="cta">
+      <a class="button" href="https://github.com/harsting/sprachacus">Auf GitHub ansehen</a>
+      <a class="button secondary" href="#einrichten">Einrichten</a>
+    </div>
+    <p class="en">
+      <strong>English:</strong> A local dictation app for macOS 26+. Tap the right Option key, speak, tap
+      again — the polished text lands at your cursor. On-device transcription, a clipboard-aware writing
+      assistant and meeting transcription with separate speaker channels.
+    </p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>Drei Betriebsarten, eine Taste</h2>
+    <p class="sub">Alles läuft über die rechte Optionstaste — kein neues Tastenkürzel zu lernen.</p>
+    <div class="modes">
+      <div class="mode">
+        <span class="key">⌥ einmal</span>
+        <h3>Diktat</h3>
+        <p>Drücken, sprechen, erneut drücken. Der Text wird lokal transkribiert, sprachlich geglättet
+           und an der Cursorposition eingefügt — in jeder App.</p>
+      </div>
+      <div class="mode">
+        <span class="key">⌥ doppelt</span>
+        <h3>Assist</h3>
+        <p>Die Zwischenablage wird zum Kontext, deine gesprochene Anweisung sagt, was daraus werden
+           soll. Aus einer empfangenen E-Mail wird so die passende Antwort.</p>
+      </div>
+      <div class="mode">
+        <span class="key">Menüleiste</span>
+        <h3>Meetings</h3>
+        <p>Mikrofon und System-Ton werden getrennt mitgeschrieben, die Gegenseite in einzelne Sprecher
+           zerlegt und am Ende strukturiert zusammengefasst.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>So sieht es aus</h2>
+    <p class="sub">Unaufdringlich im Hintergrund — das Overlay nimmt nie den Fokus.</p>
+
+    <figure>
+      <img src="img/overlay.png" alt="Aufnahme-Overlay am unteren Bildschirmrand">
+      <figcaption>Während des Diktats reagiert die Wellenform auf die Stimme. Du tippst weiter in der
+        App, in der der Text später landet.</figcaption>
+    </figure>
+
+    <div class="pair">
+      <figure>
+        <img src="img/assist.png" alt="Assist-Fenster mit verfasster Antwort">
+        <figcaption>Assist verfasst aus Zwischenablage und Anweisung einen fertigen Text — zum Prüfen,
+          Bearbeiten und Einfügen.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/verlauf.png" alt="Verlauf der Diktate">
+        <figcaption>Der Verlauf zeigt zu jedem Eintrag Roh-Transkript, Ergebnis und das verwendete
+          Modell.</figcaption>
+      </figure>
+    </div>
+
+    <figure>
+      <img src="img/einstellungen.png" alt="Einstellungen von Sprachacus">
+      <figcaption>Mikrofon, Modellwahl mit Live-Status und die frei editierbaren Anweisungen an die KI.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Was auf dem Gerät bleibt</h2>
+    <p class="sub">Die Aufnahme selbst verlässt den Mac nie.</p>
+    <div class="facts">
+      <div class="fact">
+        <strong>Spracherkennung</strong>
+        <span>Apples <code>SpeechAnalyzer</code>, vollständig lokal — auch ohne Internet.</span>
+      </div>
+      <div class="fact">
+        <strong>Sprechertrennung</strong>
+        <span>Lokal über FluidAudio. Modelle werden einmalig geladen, danach offline.</span>
+      </div>
+      <div class="fact">
+        <strong>Textkorrektur</strong>
+        <span>Wahlweise Apple Intelligence auf dem Gerät oder die Claude Code CLI. Nur fertiger
+          Text, nie Audio.</span>
+      </div>
+      <div class="fact">
+        <strong>Zugangsdaten</strong>
+        <span>Sprachacus speichert keine. Es nutzt die Anmeldung, die auf dem Mac ohnehin vorhanden ist.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="einrichten">
+  <div class="wrap">
+    <h2>Einrichten</h2>
+    <p class="sub">Ein Befehl prüft die Voraussetzungen, baut die App und installiert sie.</p>
+<pre>git clone https://github.com/harsting/sprachacus.git
+cd sprachacus
+make setup</pre>
+    <ol>
+      <li>Bedienungshilfen freigeben — für den globalen Hotkey und das Einfügen.</li>
+      <li>Mikrofon erlauben.</li>
+      <li>Fertig: rechte Optionstaste drücken, sprechen, erneut drücken.</li>
+    </ol>
+    <p style="color: var(--muted); font-size: 14.5px;">
+      Vorausgesetzt werden macOS 26 (Tahoe) auf Apple Silicon und die Xcode Command Line Tools.
+      Für Assist und Meeting-Zusammenfassungen zusätzlich die
+      <a href="https://code.claude.com/docs">Claude Code CLI</a>. Ausführlich im
+      <a href="https://github.com/harsting/sprachacus#readme">README</a>.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Aufzeichnung von Gesprächen</h2>
+    <p class="sub" style="margin-bottom: 12px;">Bitte vor dem ersten Meeting lesen.</p>
+    <p style="color: var(--muted); font-size: 14.5px; margin: 0;">
+      Die Meeting-Funktion nimmt auch die Stimmen anderer Personen auf. In Deutschland ist die
+      Aufzeichnung des nicht öffentlich gesprochenen Wortes ohne Einwilligung aller Beteiligten
+      strafbar (§ 201 StGB); anderswo gelten vergleichbare Regeln. Informiere alle Teilnehmenden und
+      hole ihr Einverständnis ein. Die App weist beim ersten Start der Funktion einmalig darauf hin —
+      die Verantwortung liegt bei dir.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      Ein Projekt von <a href="https://harsting.de">Marvin Ewald Harst</a> ·
+      <a href="https://github.com/harsting/sprachacus">Quellcode</a> ·
+      <a href="https://github.com/harsting/sprachacus/blob/main/LICENSE">GPL-3.0</a>
+    </p>
+    <p style="opacity: .75;">„Spokenly“ ist ein fremdes Produkt und steht in keiner Verbindung zu diesem Projekt.</p>
+  </div>
+</footer>
+
+</body>
+</html>

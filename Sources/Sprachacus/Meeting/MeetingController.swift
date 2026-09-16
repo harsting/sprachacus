@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Foundation
 
 /// Records a meeting: the microphone ("Ich") and the system audio mix
@@ -21,11 +22,15 @@ final class MeetingController: ObservableObject {
     /// Ton läuft über interne Lautsprecher — das Mikrofon hört die Gegenseite mit.
     @Published private(set) var echoRisk = false
     @Published private(set) var inputDeviceName: String?
+    /// Meldung, wenn eine Spur dauerhaft ausgefallen ist — darf nicht still bleiben.
+    @Published private(set) var channelWarning: String?
 
     private var meeting: MeetingMeta?
     private var startedAt = Date()
-    private var micTranscriber: Transcriber?
-    private var systemTranscriber: Transcriber?
+    private var micChannel: TranscriptionChannel?
+    private var systemChannel: TranscriptionChannel?
+    private var audioWriter: WavWriter?
+    private var logHandle: FileHandle?
     private let recorder = AudioRecorder()
     private let capture = SystemAudioCapture()
     private var timer: Timer?
@@ -62,23 +67,41 @@ final class MeetingController: ObservableObject {
                 self.meeting = meeting
                 startedAt = Date()
 
-                let mic = Transcriber()
-                let system = Transcriber()
-                micTranscriber = mic
-                systemTranscriber = system
+                openLog(for: meeting.id)
+                appendLog("Meeting gestartet — Sprache \(languageCode), Mikrofon \(AudioDevices.name(forUID: Settings.shared.inputDeviceUID ?? "") ?? "Systemstandard")")
 
-                try await mic.start(locale: locale, onPartial: { [weak self] text in
-                    Task { @MainActor in self?.partialMe = text }
-                }, onFinalSegment: { [weak self] text, start, end in
-                    Task { @MainActor in self?.record(text, from: .me, start: start, end: end) }
-                })
-                // Der Mitschnitt der Gegenseite ist die Grundlage der
-                // Sprechertrennung nach dem Meeting.
-                try await system.start(locale: locale, onPartial: { [weak self] text in
-                    Task { @MainActor in self?.partialOthers = text }
-                }, onFinalSegment: { [weak self] text, start, end in
-                    Task { @MainActor in self?.record(text, from: .others, start: start, end: end) }
-                }, recordTo: MeetingStore.shared.systemAudioURL(for: meeting.id))
+                // Mitschnitt der Gegenseite: Grundlage der Sprechertrennung.
+                // Läuft bewusst unabhängig von der Erkennung — fällt die aus,
+                // ist der Ton trotzdem vollständig erhalten.
+                if let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000,
+                                              channels: 1, interleaved: false) {
+                    audioWriter = WavWriter(url: MeetingStore.shared.systemAudioURL(for: meeting.id),
+                                            format: format)
+                }
+
+                let mic = TranscriptionChannel(name: "Ich", locale: locale)
+                let system = TranscriptionChannel(name: "Andere", locale: locale)
+                micChannel = mic
+                systemChannel = system
+                for (channel, source) in [(mic, MeetingSegment.Source.me), (system, .others)] {
+                    channel.log = { [weak self] message in
+                        Task { @MainActor in self?.appendLog(message) }
+                    }
+                    channel.onSegment = { [weak self] text, start, end in
+                        Task { @MainActor in self?.record(text, from: source, start: start, end: end) }
+                    }
+                    channel.onHealthChanged = { [weak self] healthy, message in
+                        Task { @MainActor in
+                            self?.channelWarning = healthy ? nil : message
+                            if let message { self?.appendLog("WARNUNG: \(message)") }
+                        }
+                    }
+                }
+                mic.onPartial = { [weak self] text in Task { @MainActor in self?.partialMe = text } }
+                system.onPartial = { [weak self] text in Task { @MainActor in self?.partialOthers = text } }
+
+                try await mic.start()
+                try await system.start()
                 guard isRecording else {
                     mic.cancel(); system.cancel()
                     return
@@ -95,8 +118,9 @@ final class MeetingController: ObservableObject {
                     })
                 updateEchoRisk()
 
-                capture.onBuffer = { [weak system] buffer in
+                capture.onBuffer = { [weak self, weak system] buffer in
                     system?.feed(buffer)
+                    self?.audioWriter?.write(buffer)
                 }
                 capture.onLevel = { [weak self] level in
                     Task { @MainActor in self?.systemLevel = level }
@@ -190,6 +214,8 @@ final class MeetingController: ObservableObject {
             }
             MeetingStore.shared.update(updated)
 
+            appendLog("Zusammenfassung abgeschlossen")
+            closeLog()
             isSummarizing = false
             self.meeting = nil
             MeetingWindowController.shared.hide()
@@ -213,6 +239,29 @@ final class MeetingController: ObservableObject {
     }
 
     // MARK: - Internals
+
+    // MARK: - Protokoll
+
+    /// Schreibt den Verlauf neben das Transkript. Bei einem Ausfall wie dem
+    /// vom 16.09. lässt sich damit nachvollziehen, wann und warum eine Spur
+    /// weggebrochen ist — NSLog ist aus dieser App nicht auslesbar.
+    private func openLog(for id: UUID) {
+        let url = MeetingStore.shared.logURL(for: id)
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        logHandle = try? FileHandle(forWritingTo: url)
+    }
+
+    private func appendLog(_ message: String) {
+        NSLog("Meeting: \(message)")
+        guard let logHandle else { return }
+        let line = "[\(ISO8601DateFormatter().string(from: Date()))] \(message)\n"
+        logHandle.write(Data(line.utf8))
+    }
+
+    private func closeLog() {
+        try? logHandle?.close()
+        logHandle = nil
+    }
 
     private func record(_ text: String, from source: MeetingSegment.Source,
                         start: TimeInterval, end: TimeInterval) {
@@ -300,12 +349,15 @@ final class MeetingController: ObservableObject {
         recorder.stop()
         capture.stop()
         endActivity()
-        // finish() flushes the analyzers, so trailing speech still lands in the
-        // transcript via onFinalSegment.
-        if let micTranscriber { _ = try? await micTranscriber.finish() }
-        if let systemTranscriber { _ = try? await systemTranscriber.finish() }
-        micTranscriber = nil
-        systemTranscriber = nil
+        audioWriter?.close()
+        audioWriter = nil
+        // finish() leert die Analyzer, damit auch der letzte Satz noch über
+        // onSegment im Transkript landet.
+        if let micChannel { _ = await micChannel.finish() }
+        if let systemChannel { _ = await systemChannel.finish() }
+        appendLog("Aufzeichnung beendet — Neustarts: Ich \(micChannel?.restartCount ?? 0), Andere \(systemChannel?.restartCount ?? 0)")
+        micChannel = nil
+        systemChannel = nil
         systemAudioActive = false
         micLevel = 0
         systemLevel = 0
@@ -321,6 +373,9 @@ final class MeetingController: ObservableObject {
                 self.elapsed = Date().timeIntervalSince(self.startedAt)
                 // Kopfhörer abgenommen? Dann wechselt macOS auf Lautsprecher.
                 if Int(self.elapsed) % 5 == 0 { self.updateEchoRisk() }
+                // Blockierte Erkennung erkennen und neu starten.
+                self.micChannel?.checkLiveness()
+                self.systemChannel?.checkLiveness()
             }
         }
     }

@@ -72,6 +72,14 @@ struct MeetingLiveView: View {
                                active: controller.systemAudioActive)
             }
 
+            if let warning = controller.channelWarning {
+                Label(warning + " — Ton wird weiter mitgeschnitten, Meeting besser neu starten.",
+                      systemImage: "exclamationmark.octagon.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if controller.echoRisk {
                 Label("Ton läuft über die Lautsprecher — das Mikrofon hört die Gegenseite mit. Für ein sauberes Transkript besser Kopfhörer aufsetzen.",
                       systemImage: "speaker.wave.2.fill")

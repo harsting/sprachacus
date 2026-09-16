@@ -16,11 +16,10 @@ final class Transcriber {
     private var recognizerTask: Task<String, Error>?
     private var converter: AVAudioConverter?
     private var analyzerFormat: AVAudioFormat?
-    /// Optionaler Mitschnitt exakt in der Analyse-Abtastrate. Dadurch teilen
-    /// Datei und Transkript dieselbe Zeitachse — Voraussetzung dafür, später
-    /// Sprecherabschnitte den Sätzen zuzuordnen.
-    private var recordingFile: AVAudioFile?
-    private let recordingLock = NSLock()
+    /// Meldet, dass der Ergebnisstrom geendet hat — mit Fehler oder einfach so.
+    /// Ohne diese Meldung liefe Ton in eine tote Erkennung, ohne dass es
+    /// jemand merkt (genau so ist im Betrieb ein halbes Transkript entstanden).
+    var onStreamEnded: ((Error?) -> Void)?
     /// Bisher erkannter Text, auch von außen lesbar — damit ein abgebrochener
     /// Abschluss noch liefert, was bereits verstanden wurde.
     private let textLock = NSLock()
@@ -28,6 +27,8 @@ final class Transcriber {
     /// Ob überhaupt Ton eingespeist wurde. Ohne Ton hat der Analyzer nichts zu
     /// finalisieren und der Abschluss kann endlos warten.
     private var fedFrames: UInt64 = 0
+    /// Verhindert, dass ein planmäßiger Abschluss als Ausfall gemeldet wird.
+    private var isFinishing = false
 
     // MARK: - Model management
 
@@ -68,11 +69,9 @@ final class Transcriber {
     ///   - onFinalSegment: fires for every finalized chunk while the session
     ///     runs (meeting mode appends these live) together with its position
     ///     on the audio timeline; `finish()` still returns the full text.
-    ///   - recordTo: schreibt den analysierten Ton zusätzlich als Datei mit.
     func start(locale: Locale,
                onPartial: @escaping (String) -> Void,
-               onFinalSegment: ((String, TimeInterval, TimeInterval) -> Void)? = nil,
-               recordTo url: URL? = nil) async throws {
+               onFinalSegment: ((String, TimeInterval, TimeInterval) -> Void)? = nil) async throws {
         let transcriber = SpeechTranscriber(locale: locale,
                                             transcriptionOptions: [],
                                             reportingOptions: [.volatileResults],
@@ -84,40 +83,35 @@ final class Transcriber {
             throw TranscriberError(message: "Kein kompatibles Audioformat gefunden")
         }
 
-        if let url, let format = analyzerFormat {
-            do {
-                // commonFormat/interleaved mitgeben: Sonst erwartet AVAudioFile
-                // Float32-Puffer, und das Schreiben der Int16-Puffer schlägt
-                // still fehl — die Datei bliebe leer.
-                recordingFile = try AVAudioFile(forWriting: url,
-                                                settings: format.settings,
-                                                commonFormat: format.commonFormat,
-                                                interleaved: format.isInterleaved)
-            } catch {
-                NSLog("Transcriber: Mitschnitt konnte nicht angelegt werden: \(error.localizedDescription)")
-            }
-        }
-
         let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
         self.inputBuilder = continuation
 
-        recognizerTask = Task {
+        recognizerTask = Task { [weak self] in
             var finalText = ""
-            for try await result in transcriber.results {
-                let text = String(result.text.characters)
-                if result.isFinal {
-                    finalText += text
-                    self.textLock.lock()
-                    self.collectedText = finalText
-                    self.textLock.unlock()
-                    let segment = Self.normalize(text)
-                    if !segment.isEmpty {
-                        let range = result.range
-                        onFinalSegment?(segment, range.start.seconds, range.end.seconds)
+            var failure: Error?
+            do {
+                for try await result in transcriber.results {
+                    let text = String(result.text.characters)
+                    if result.isFinal {
+                        finalText += text
+                        self?.textLock.lock()
+                        self?.collectedText = finalText
+                        self?.textLock.unlock()
+                        let segment = Self.normalize(text)
+                        if !segment.isEmpty {
+                            let range = result.range
+                            onFinalSegment?(segment, range.start.seconds, range.end.seconds)
+                        }
+                    } else {
+                        onPartial(text)
                     }
-                } else {
-                    onPartial(text)
                 }
+            } catch {
+                failure = error
+            }
+            // Ende des Stroms — ob planmäßig oder nicht — nach außen melden.
+            if let self, !self.isFinishing {
+                self.onStreamEnded?(failure)
             }
             return finalText
         }
@@ -150,11 +144,6 @@ final class Transcriber {
         }
         guard status != .error, out.frameLength > 0 else { return }
         fedFrames += UInt64(out.frameLength)
-        if let recordingFile {
-            recordingLock.lock()
-            try? recordingFile.write(from: out)
-            recordingLock.unlock()
-        }
         inputBuilder.yield(AnalyzerInput(buffer: out))
     }
 
@@ -164,6 +153,7 @@ final class Transcriber {
     /// etwa wenn gar nicht gesprochen wurde —, wird er abgebrochen und das
     /// bis dahin Erkannte zurückgegeben, statt endlos zu warten.
     func finish(timeout: TimeInterval = 12) async throws -> String {
+        isFinishing = true
         inputBuilder?.finish()
         let analyzer = self.analyzer
         let task = self.recognizerTask
@@ -203,6 +193,7 @@ final class Transcriber {
     }
 
     func cancel() {
+        isFinishing = true
         recognizerTask?.cancel()
         inputBuilder?.finish()
         let analyzer = self.analyzer
@@ -217,9 +208,6 @@ final class Transcriber {
         converter = nil
         analyzerFormat = nil
         fedFrames = 0
-        recordingLock.lock()
-        recordingFile = nil
-        recordingLock.unlock()
     }
 
     static func normalize(_ text: String) -> String {

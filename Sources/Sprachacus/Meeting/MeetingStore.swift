@@ -187,6 +187,11 @@ final class MeetingStore: ObservableObject {
         return seen
     }
 
+    /// Verlaufsprotokoll einer Aufzeichnung.
+    func logURL(for id: UUID) -> URL {
+        dir(for: id).appendingPathComponent("meeting.log")
+    }
+
     /// Pfad des Mitschnitts der Gegenseite (Grundlage der Sprechertrennung).
     func systemAudioURL(for id: UUID) -> URL {
         dir(for: id).appendingPathComponent("system-audio.wav")

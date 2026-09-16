@@ -79,8 +79,14 @@ final class MeetingController: ObservableObject {
                                             format: format)
                 }
 
-                let mic = TranscriptionChannel(name: "Ich", locale: locale)
-                let system = TranscriptionChannel(name: "Andere", locale: locale)
+                // Eigene Begriffe (Namen, Kürzel, Standnummern) gehen der
+                // Erkennung sonst am ehesten verloren.
+                let vocabulary = Settings.shared.vocabularyTerms
+                if !vocabulary.isEmpty {
+                    appendLog("Vokabular aktiv: \(vocabulary.count) Begriffe")
+                }
+                let mic = TranscriptionChannel(name: "Ich", locale: locale, vocabulary: vocabulary)
+                let system = TranscriptionChannel(name: "Andere", locale: locale, vocabulary: vocabulary)
                 micChannel = mic
                 systemChannel = system
                 for (channel, source) in [(mic, MeetingSegment.Source.me), (system, .others)] {
@@ -272,8 +278,14 @@ final class MeetingController: ObservableObject {
         // Sicherheitsnetz: Läuft der Ton über Lautsprecher, hört das Mikrofon
         // die Gegenseite mit. Die Echo-Unterdrückung fängt das meist ab; was
         // durchkommt, würde sonst als eigene Wortmeldung im Transkript stehen.
-        if source == .me, isEchoOfOthers(text, at: time) {
-            NSLog("Meeting: Mikrofon-Segment als Echo verworfen: \(text.prefix(60))")
+        // Nur wenn der Ton über Lautsprecher läuft, kann das Mikrofon die
+        // Gegenseite überhaupt mithören. Mit Kopfhörern würde der Filter nur
+        // echte eigene Sätze verwerfen — etwa wenn man wiederholt, was der
+        // andere gerade gesagt hat.
+        if source == .me, echoRisk, isEchoOfOthers(text, at: time) {
+            // Ohne Wortlaut: Das Protokoll liegt neben dem Transkript und soll
+            // keine Gesprächsinhalte doppeln.
+            appendLog("Mikrofon-Abschnitt als Echo der Gegenseite verworfen (\(Self.words(text).count) Wörter, bei \(Int(time)) s)")
             partialMe = ""
             return
         }
@@ -281,7 +293,12 @@ final class MeetingController: ObservableObject {
                                      text: text,
                                      t: time,
                                      end: end.isFinite ? end : nil)
-        segments.append(segment)
+        // Nach Zeit einsortieren statt anhängen: Die beiden Spuren melden ihre
+        // Abschnitte unabhängig voneinander und unterschiedlich schnell. Beim
+        // Anhängen stünde im Livefenster die Antwort vor der Frage, sobald zwei
+        // Sätze dicht aufeinander folgen oder jemand dazwischenredet.
+        let position = segments.lastIndex { $0.t <= time }.map { $0 + 1 } ?? 0
+        segments.insert(segment, at: position)
         switch source {
         case .me: partialMe = ""
         case .others: partialOthers = ""
@@ -297,6 +314,10 @@ final class MeetingController: ObservableObject {
         guard words.count >= 5 else { return false }
         for segment in segments.reversed() where segment.source == .others {
             guard time - segment.t < 15 else { break }
+            // Ein Echo klingt gleichzeitig mit dem Original, nicht danach:
+            // Es muss in dessen Zeitfenster fallen. Was der andere längst
+            // gesagt hat und ich jetzt wiederhole, ist meine eigene Aussage.
+            guard time <= (segment.end ?? segment.t) + 2 else { continue }
             if Self.similarity(words, Self.words(segment.text)) > 0.8 { return true }
         }
         return false

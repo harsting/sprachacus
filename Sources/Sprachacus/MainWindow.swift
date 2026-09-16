@@ -277,6 +277,7 @@ struct SettingsTab: View {
     @AppStorage("assistPrompt.en") private var assistPromptEn = ""
     @AppStorage("assistProvider") private var assistProviderRaw = AssistProviderChoice.auto.rawValue
     @AppStorage("userName") private var userName = ""
+    @AppStorage("vocabulary") private var vocabulary = ""
     @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
     @AppStorage("speakerDiarization") private var speakerDiarization = true
     @AppStorage("keepMeetingAudio") private var keepMeetingAudio = false
@@ -299,6 +300,19 @@ struct SettingsTab: View {
                 Text("Persönliches")
             } footer: {
                 Text("Assist verfasst Texte in deinem Namen, und in Meeting-Zusammenfassungen wird „Ich“ dir zugeordnet. Das Feld darf leer bleiben — dann arbeitet die KI ohne Namen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                TextField("Begriffe", text: $vocabulary, axis: .vertical)
+                    .lineLimit(3...8)
+                    .font(.system(.body, design: .monospaced))
+                    .labelsHidden()
+            } header: {
+                Text("Eigene Begriffe")
+            } footer: {
+                Text("Namen, Kürzel, Produkt- und Standnummern — eine pro Zeile oder mit Komma getrennt. Genau solche Wörter überhört die Spracherkennung am ehesten, weil sie in keinem Wörterbuch stehen. Was hier steht, wird bevorzugt erkannt und von der KI-Korrektur nicht mehr „verbessert“.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

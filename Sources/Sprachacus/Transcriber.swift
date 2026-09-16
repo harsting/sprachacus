@@ -69,15 +69,30 @@ final class Transcriber {
     ///   - onFinalSegment: fires for every finalized chunk while the session
     ///     runs (meeting mode appends these live) together with its position
     ///     on the audio timeline; `finish()` still returns the full text.
+    ///   - vocabulary: eigene Begriffe (Namen, Kürzel, Standnummern), die das
+    ///     Modell bevorzugt erkennen soll. Ohne diesen Hinweis verliert die
+    ///     Erkennung genau solche Wörter — sie stehen in keinem Wörterbuch.
     func start(locale: Locale,
+               vocabulary: [String] = [],
                onPartial: @escaping (String) -> Void,
                onFinalSegment: ((String, TimeInterval, TimeInterval) -> Void)? = nil) async throws {
         let transcriber = SpeechTranscriber(locale: locale,
                                             transcriptionOptions: [],
                                             reportingOptions: [.volatileResults],
-                                            attributeOptions: [])
+                                            // Ohne diese Option meldet der
+                                            // Analyzer im Livebetrieb nur einen
+                                            // Zeitpunkt statt eines Zeitraums —
+                                            // die Sprechertrennung braucht aber
+                                            // Anfang und Ende jedes Abschnitts.
+                                            attributeOptions: [.audioTimeRange])
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         self.analyzer = analyzer
+
+        if !vocabulary.isEmpty {
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = vocabulary
+            try? await analyzer.setContext(context)
+        }
         self.analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
         guard analyzerFormat != nil else {
             throw TranscriberError(message: "Kein kompatibles Audioformat gefunden")

@@ -64,6 +64,30 @@ final class Settings {
         set { defaults.set(newValue ?? "", forKey: "inputDeviceUID") }
     }
 
+    /// Eigene Begriffe, die die Spracherkennung bevorzugt erkennen soll —
+    /// Namen, Kürzel, Standnummern („K2“), Produktbezeichnungen. Genau solche
+    /// Wörter sind für ein allgemeines Sprachmodell die schwersten: Sie stehen
+    /// in keinem Wörterbuch und gehen im schnellen Sprechen unter.
+    var vocabulary: String {
+        get { defaults.string(forKey: "vocabulary") ?? "" }
+        set { defaults.set(newValue, forKey: "vocabulary") }
+    }
+
+    /// Das Vokabular als Liste. Trennt an Zeilenumbrüchen, Kommas und
+    /// Semikola, damit es egal ist, wie man es hinschreibt.
+    var vocabularyTerms: [String] {
+        var seen = Set<String>()
+        return vocabulary
+            .components(separatedBy: CharacterSet(charactersIn: "\n,;"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .prefix(Self.maximumVocabularyTerms)
+            .map { $0 }
+    }
+
+    /// Obergrenze — eine sehr lange Liste verwässert die Gewichtung, statt zu helfen.
+    static let maximumVocabularyTerms = 100
+
     /// Sprechertrennung nach dem Meeting („Sprecher 1/2/3“ statt nur „Andere“).
     var speakerDiarization: Bool {
         get { defaults.object(forKey: "speakerDiarization") as? Bool ?? true }

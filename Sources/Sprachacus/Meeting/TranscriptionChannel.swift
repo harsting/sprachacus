@@ -22,6 +22,7 @@ final class TranscriptionChannel: @unchecked Sendable {
     var log: ((String) -> Void)?
 
     private let locale: Locale
+    private let vocabulary: [String]
     private let lock = NSLock()
     private var transcriber: Transcriber?
     private var running = false
@@ -32,6 +33,13 @@ final class TranscriptionChannel: @unchecked Sendable {
     private var sessionOffset: TimeInterval = 0
     /// Lauter Ton seit dem letzten Ergebnis. Grundlage der Blockade-Erkennung.
     private var loudSecondsSinceResult: TimeInterval = 0
+    /// Ton, der eintrifft, während gerade keine Sitzung offen ist (Neustart).
+    /// Ohne diesen Puffer wäre alles, was in diesen Sekunden gesagt wird,
+    /// ersatzlos weg — ausgerechnet in dem Moment, in dem es schon einmal
+    /// gehakt hat.
+    private var pending: [AVAudioPCMBuffer] = []
+    private var pendingSeconds: TimeInterval = 0
+    private static let maximumPendingSeconds: TimeInterval = 30
     private var restarts = 0
     private var lastRestart = Date.distantPast
     private var healthy = true
@@ -46,9 +54,11 @@ final class TranscriptionChannel: @unchecked Sendable {
 
     /// - Parameter stallThreshold: So lange darf lauter Ton ohne ein einziges
     ///   Ergebnis bleiben, bevor die Erkennung als blockiert gilt.
-    init(name: String, locale: Locale, stallThreshold: TimeInterval = 45) {
+    init(name: String, locale: Locale, vocabulary: [String] = [],
+         stallThreshold: TimeInterval = 45) {
         self.name = name
         self.locale = locale
+        self.vocabulary = vocabulary
         self.stallThreshold = stallThreshold
     }
 
@@ -63,42 +73,68 @@ final class TranscriptionChannel: @unchecked Sendable {
     }
 
     private func openSession() async throws {
-        lock.lock()
-        let offset = secondsFed
-        lock.unlock()
+        // Der Zeitversatz wird fest in die Rückrufe dieser Sitzung gelegt.
+        // Würde er erst beim Eintreffen eines Ergebnisses gelesen, bekämen
+        // nachgereichte Abschnitte einer beendeten Sitzung den Versatz der
+        // neuen. Der endgültige Wert steht erst fest, wenn klar ist, wie viel
+        // gepufferter Ton dieser Sitzung vorangestellt wird — deshalb die Box.
+        let offset = OffsetBox()
 
         let transcriber = Transcriber()
         transcriber.onStreamEnded = { [weak self] error in
             self?.handleStreamEnded(error)
         }
-        // Der Zeitversatz wird hier fest in die Rückrufe gelegt. Würde er erst
-        // beim Eintreffen eines Ergebnisses gelesen, bekämen nachgereichte
-        // Abschnitte einer beendeten Sitzung den Versatz der neuen.
-        try await transcriber.start(locale: locale, onPartial: { [weak self] text in
+        try await transcriber.start(locale: locale, vocabulary: vocabulary, onPartial: { [weak self] text in
             self?.onPartial?(text)
         }, onFinalSegment: { [weak self] text, start, end in
             guard let self else { return }
-            self.lock.lock(); self.loudSecondsSinceResult = 0; self.lock.unlock()
-            self.onSegment?(text, offset + start, offset + end)
+            self.lock.lock(); self.loudSecondsSinceResult = 0; let base = offset.value; self.lock.unlock()
+            self.onSegment?(text, base + start, base + end)
         })
+
         lock.lock()
+        let buffered = pending
+        // Der gepufferte Ton liegt vor dem jetzigen Zeitpunkt — die Sitzung
+        // beginnt entsprechend früher, sonst läge alles Folgende zu spät.
+        offset.value = secondsFed - pendingSeconds
+        pending = []
+        pendingSeconds = 0
         self.transcriber = transcriber
-        self.sessionOffset = offset
+        self.sessionOffset = offset.value
         self.loudSecondsSinceResult = 0
         lock.unlock()
+
+        for buffer in buffered { transcriber.feed(buffer) }
     }
 
     /// Wird aus dem Audio-Thread aufgerufen.
     func feed(_ buffer: AVAudioPCMBuffer) {
         lock.lock()
-        guard running, let transcriber else { lock.unlock(); return }
+        guard running else { lock.unlock(); return }
+        // Die Zeitachse zählt bewusst auch die Sekunden mit, in denen gerade
+        // keine Sitzung offen ist (während eines Neustarts). Täte sie das
+        // nicht, bekämen alle folgenden Abschnitte einen zu frühen Zeitstempel
+        // und lägen dauerhaft neben der anderen Spur.
         let duration = Double(buffer.frameLength) / buffer.format.sampleRate
         secondsFed += duration
         if Self.rms(buffer) > Self.loudnessThreshold {
             loudSecondsSinceResult += duration
         }
+        let current = transcriber
+        if current == nil, let copy = Self.copy(buffer) {
+            // Bewusst eine Kopie: Der Puffer aus dem Audio-Tap gehört dem
+            // System und darf über den Rückruf hinaus nicht festgehalten werden.
+            pending.append(copy)
+            pendingSeconds += duration
+            // Puffer begrenzen: Kommt die Erkennung gar nicht zurück, darf der
+            // Speicher nicht mitwachsen.
+            while pendingSeconds > Self.maximumPendingSeconds, let first = pending.first {
+                pendingSeconds -= Double(first.frameLength) / first.format.sampleRate
+                pending.removeFirst()
+            }
+        }
         lock.unlock()
-        transcriber.feed(buffer)
+        current?.feed(buffer)
     }
 
     /// Einmal je Sekunde vom Meeting-Zeitgeber aufgerufen.
@@ -113,13 +149,30 @@ final class TranscriptionChannel: @unchecked Sendable {
     }
 
     func finish(timeout: TimeInterval = 12) async -> String {
-        lock.lock(); running = false; let current = transcriber; transcriber = nil; lock.unlock()
+        lock.lock()
+        running = false
+        let current = transcriber
+        transcriber = nil
+        // Was noch im Neustart-Puffer liegt, kommt jetzt nicht mehr an.
+        let stranded = pendingSeconds
+        pending = []
+        pendingSeconds = 0
+        lock.unlock()
+        if stranded > 0.5 {
+            log?("\(name): \(String(format: "%.1f", stranded)) s Ton aus einem laufenden Neustart konnten nicht mehr ausgewertet werden")
+        }
         guard let current else { return "" }
         return (try? await current.finish(timeout: timeout)) ?? ""
     }
 
     func cancel() {
-        lock.lock(); running = false; let current = transcriber; transcriber = nil; lock.unlock()
+        lock.lock()
+        running = false
+        let current = transcriber
+        transcriber = nil
+        pending = []
+        pendingSeconds = 0
+        lock.unlock()
         current?.cancel()
     }
 
@@ -174,6 +227,32 @@ final class TranscriptionChannel: @unchecked Sendable {
                 self.restart(reason: "erneuter Versuch")
             }
         }
+    }
+
+    private static func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format,
+                                          frameCapacity: buffer.frameLength) else { return nil }
+        copy.frameLength = buffer.frameLength
+        let channels = Int(buffer.format.channelCount)
+        let frames = Int(buffer.frameLength)
+        if let source = buffer.floatChannelData, let target = copy.floatChannelData {
+            for channel in 0..<channels {
+                target[channel].update(from: source[channel], count: frames)
+            }
+            return copy
+        }
+        if let source = buffer.int16ChannelData, let target = copy.int16ChannelData {
+            for channel in 0..<channels {
+                target[channel].update(from: source[channel], count: frames)
+            }
+            return copy
+        }
+        return nil
+    }
+
+    /// Hält den Zeitversatz einer Sitzung, der erst nach dem Start feststeht.
+    private final class OffsetBox {
+        var value: TimeInterval = 0
     }
 
     private static func rms(_ buffer: AVAudioPCMBuffer) -> Float {

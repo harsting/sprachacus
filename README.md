@@ -149,6 +149,23 @@ Text und antwortet mit Text.
 **Ohne beides** bleibt das Diktat voll funktionsfähig; der Text wird dann unbearbeitet eingefügt.
 Der Assist-Modus meldet in diesem Fall, dass keine KI verfügbar ist.
 
+## Eigene Begriffe
+
+Namen, Kürzel, Produkt- und Standnummern sind für ein allgemeines Sprachmodell die schwersten
+Wörter überhaupt: Sie stehen in keinem Wörterbuch, und im schnellen Sprechen wird aus „K2" schnell
+„Kader zwei" oder gar nichts. Unter **Einstellungen → Eigene Begriffe** lässt sich deshalb eine
+eigene Wortliste pflegen (eine pro Zeile oder mit Komma getrennt, bis zu 100 Einträge).
+
+Sie wirkt an drei Stellen:
+
+- Die Spracherkennung bekommt die Liste als Kontext mit (`AnalysisContext.contextualStrings`) und
+  bevorzugt diese Schreibweisen. Das ist eine Gewichtung, keine Garantie — bei deutlich
+  abweichender Aussprache hilft sie nicht.
+- Die KI-Korrektur beim Diktat bekommt die Liste als feste Regel: Sie darf diese Begriffe nicht
+  „verbessern" und setzt erkennbar verhörte Fassungen zurück (getestet: „Rento Kiel" → „Rentokil").
+- Die Meeting-Zusammenfassung schreibt sie richtig, auch wenn im Transkript eine verhörte Fassung
+  steht.
+
 ## Menüleiste & Fenster
 
 Über das Mikrofon-Symbol: KI-Optimierung wählen (Automatisch / Apple Intelligence / Claude CLI / Aus), Sprache (Deutsch/Englisch), Start bei Anmeldung, Berechtigungs-Status — und **„Verlauf & Einstellungen…"**:
@@ -187,7 +204,14 @@ Sources/Sprachacus/
 
 Beim ersten Meeting fragt Sprachacus die Freigabe **„Bildschirm- & Systemaudioaufnahme"** an (nötig, um den System-Ton mitzuhören — nur so ist die Gegenseite bei Kopfhörer-Calls hörbar). Danach App neu starten. macOS zeigt während der Aufzeichnung dauerhaft ein lila Aufnahmesymbol in der Menüleiste und fragt etwa monatlich nach — beides systemseitig und nicht abschaltbar.
 
-Meetings liegen unter `~/Library/Application Support/Sprachacus/meetings/<uuid>/` als `meta.json` + `transcript.jsonl`. Jeder Abschnitt wird sofort geschrieben: Ein Absturz nach 90 Minuten kostet höchstens den letzten Satz.
+Meetings liegen unter `~/Library/Application Support/Sprachacus/meetings/<uuid>/` als `meta.json` + `transcript.jsonl` + `meeting.log`. Jeder Abschnitt wird sofort geschrieben: Ein Absturz nach 90 Minuten kostet höchstens den letzten Satz.
+
+**Reihenfolge und Zeitachse:** Beide Spuren („Ich" und „Andere") transkribieren unabhängig und
+unterschiedlich schnell. Abschnitte werden deshalb nicht in der Reihenfolge ihres Eintreffens
+angezeigt, sondern nach ihrer Position auf der Tonspur einsortiert — sonst stünde bei schnellem
+Wechselgespräch die Antwort vor der Frage. Muss eine Spur neu gestartet werden, wird der Ton
+währenddessen zwischengespeichert und danach nachgereicht; die Zeitachse läuft über den Neustart
+hinweg durch.
 
 **Mikrofon und Echo:** Unter Einstellungen → Mikrofon lässt sich ein festes Eingabegerät wählen (sonst folgt Sprachacus dem Systemstandard). Wichtig bei Meetings ohne Kopfhörer: Läuft der Ton über die Lautsprecher, hört das Mikrofon die Gegenseite mit und ihre Sätze landen doppelt im Transkript. Sprachacus verwirft deshalb Mikrofon-Abschnitte, die einem kurz zuvor gehörten Beitrag der Gegenseite stark ähneln, und das Meeting-Fenster warnt, wenn der Ton über interne Lautsprecher läuft. Für ein sauberes Transkript sind Kopfhörer die zuverlässigste Lösung.
 

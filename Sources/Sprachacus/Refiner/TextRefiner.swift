@@ -24,7 +24,33 @@ enum RefinerPrompts {
     /// dictation (e.g. actually writing the email when the user dictates
     /// "kannst du mir eine E-Mail schreiben …" as a prompt for ChatGPT).
     static func systemPrompt(languageCode: String) -> String {
-        instructions(languageCode: languageCode) + "\n\n" + guardRules(languageCode: languageCode)
+        var prompt = instructions(languageCode: languageCode) + "\n\n" + guardRules(languageCode: languageCode)
+        if let vocabulary = vocabularyRules(languageCode: languageCode) {
+            prompt += "\n\n" + vocabulary
+        }
+        return prompt
+    }
+
+    /// Schützt die eigenen Begriffe des Nutzers vor gut gemeinter Korrektur:
+    /// Ohne diesen Hinweis macht ein Sprachmodell aus einer Standnummer wie
+    /// „K2“ bereitwillig etwas, das nach richtigem Deutsch aussieht.
+    static func vocabularyRules(languageCode: String) -> String? {
+        let terms = Settings.shared.vocabularyTerms
+        guard !terms.isEmpty else { return nil }
+        let list = terms.joined(separator: ", ")
+        if languageCode.hasPrefix("de") {
+            return """
+            Diese Begriffe sind fachlich korrekt, auch wenn sie ungewöhnlich aussehen: \(list). \
+            Übernimm sie unverändert und ersetze sie nicht durch ähnlich klingende Wörter. \
+            Steht im Transkript offensichtlich eine verhörte Fassung eines dieser Begriffe, \
+            setze die richtige Schreibweise ein.
+            """
+        }
+        return """
+        These terms are correct even if they look unusual: \(list). Keep them exactly as they \
+        are and never replace them with similar-sounding words. If the transcript obviously \
+        contains a misheard version of one of them, restore the correct spelling.
+        """
     }
 
     static func guardRules(languageCode: String) -> String {

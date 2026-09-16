@@ -112,7 +112,8 @@ final class DictationController {
 
                 let transcriber = Transcriber()
                 self.transcriber = transcriber
-                try await transcriber.start(locale: locale) { _ in
+                try await transcriber.start(locale: locale,
+                                            vocabulary: Settings.shared.vocabularyTerms) { _ in
                     // Live partials available here if we ever want a text preview.
                 }
                 guard self.state == .recording else {

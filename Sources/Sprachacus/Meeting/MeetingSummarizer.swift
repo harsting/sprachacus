@@ -15,6 +15,16 @@ enum MeetingSummarizer {
 
     static func systemPrompt(languageCode: String) -> String {
         let name = Settings.shared.userName
+        // Eigene Begriffe: Die Spracherkennung verhört Kürzel und Namen am
+        // ehesten. Die Zusammenfassung soll sie trotzdem richtig schreiben.
+        let terms = Settings.shared.vocabularyTerms
+        let vocabularyHint = terms.isEmpty ? "" : (languageCode.hasPrefix("de")
+            ? "\n\nDiese Begriffe kommen im Gespräch vor und sind so korrekt geschrieben: "
+              + terms.joined(separator: ", ")
+              + ". Steht im Transkript erkennbar eine verhörte Fassung davon, verwende die richtige Schreibweise.\n"
+            : "\n\nThese terms occur in the conversation and are spelled correctly here: "
+              + terms.joined(separator: ", ")
+              + ". If the transcript obviously contains a misheard version, use the correct spelling.\n")
         if languageCode.hasPrefix("de") {
             let speaker = name.isEmpty
                 ? "„Ich:“ ist die Person, die aufgezeichnet hat"
@@ -51,7 +61,7 @@ enum MeetingSummarizer {
 
             Erfinde nichts. Das Transkript stammt aus automatischer Spracherkennung und kann \
             Fehler enthalten — bei unklaren Stellen lieber weglassen als raten.
-            """
+            """ + vocabularyHint
         }
         let speakerEN = name.isEmpty
             ? "\"Ich:\" is the person who recorded the meeting"
@@ -80,7 +90,7 @@ enum MeetingSummarizer {
 
         Invent nothing. The transcript comes from automatic speech recognition and may contain \
         errors — when a passage is unclear, leave it out rather than guessing.
-        """
+        """ + vocabularyHint
     }
 
     static func summarize(transcript: String, languageCode: String) async throws -> Output {

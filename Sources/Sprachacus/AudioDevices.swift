@@ -1,5 +1,6 @@
 import CoreAudio
 import Foundation
+import IOKit
 
 /// Aufzählung der Audiogeräte über Core Audio. Geräte werden über ihre UID
 /// gemerkt, nicht über die numerische ID — die ID wechselt beim Neuanstecken.
@@ -21,6 +22,75 @@ enum AudioDevices {
 
     static func deviceID(forUID uid: String) -> AudioDeviceID? {
         inputs().first { $0.uid == uid }?.id
+    }
+
+    /// Ist dieses Gerät im Mac eingebaut?
+    static func isBuiltIn(_ id: AudioDeviceID) -> Bool {
+        transportType(of: id) == kAudioDeviceTransportTypeBuiltIn
+    }
+
+    /// Ist der Deckel des MacBooks geschlossen (Betrieb am externen Bildschirm)?
+    ///
+    /// Wichtig, weil das eingebaute Mikrofon dann **digitale Stille** liefert —
+    /// gemessen: 48.000 Abtastwerte pro Sekunde, alle exakt null. Core Audio
+    /// meldet das Gerät weiterhin als lebendig, nicht stumm und mit normalem
+    /// Eingangspegel; es bleibt sogar als Systemstandard wählbar. Ohne diese
+    /// Prüfung nimmt Sprachacus stundenlang nichts auf, ohne es zu merken.
+    static func lidIsClosed() -> Bool {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault,
+                                                  IOServiceMatching("IOPMrootDomain"))
+        guard service != 0 else { return false }
+        defer { IOObjectRelease(service) }
+        guard let value = IORegistryEntryCreateCFProperty(service, "AppleClamshellState" as CFString,
+                                                          kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? Bool else { return false }
+        return value
+    }
+
+    /// Aktuell in den Systemeinstellungen gewähltes Eingabegerät.
+    static func defaultInputID() -> AudioDeviceID? { defaultDevice(output: false) }
+
+    /// Name eines Geräts zu seiner numerischen ID.
+    static func name(forID id: AudioDeviceID) -> String? { name(of: id) }
+
+    /// Beobachtet, welches Eingabegerät das System benutzt und ob Geräte
+    /// kommen oder gehen.
+    ///
+    /// Nötig, weil `AVAudioEngineConfigurationChange` den Wechsel des
+    /// Standard-Eingabegeräts nicht zuverlässig meldet: Die Engine bleibt am
+    /// alten Gerät hängen, ohne dass es auffällt. Genau so blieb am 05.10. in
+    /// einem Meeting die eigene Stimme komplett aus — gewechselt wurde auf ein
+    /// Tischmikrofon, aufgenommen wurde weiter das alte, stumme Gerät.
+    static func observeInputChanges(_ handler: @escaping () -> Void) -> Any {
+        InputChangeObserver(handler: handler)
+    }
+
+    /// Hält die Core-Audio-Beobachter und räumt sie beim Freigeben auf.
+    private final class InputChangeObserver {
+        private let block: AudioObjectPropertyListenerBlock
+        private var addresses: [AudioObjectPropertyAddress] = [
+            AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                                       mScope: kAudioObjectPropertyScopeGlobal,
+                                       mElement: kAudioObjectPropertyElementMain),
+            AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
+                                       mScope: kAudioObjectPropertyScopeGlobal,
+                                       mElement: kAudioObjectPropertyElementMain)
+        ]
+
+        init(handler: @escaping () -> Void) {
+            block = { _, _ in handler() }
+            for index in addresses.indices {
+                AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+                                                    &addresses[index], DispatchQueue.main, block)
+            }
+        }
+
+        deinit {
+            for index in addresses.indices {
+                AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+                                                       &addresses[index], DispatchQueue.main, block)
+            }
+        }
     }
 
     /// Aktuell in den Systemeinstellungen gewähltes Ausgabegerät.

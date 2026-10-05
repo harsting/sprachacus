@@ -168,7 +168,13 @@ final class DictationController {
                 // hat — sonst würde noch eingefügt, was er verworfen hat.
                 guard !Task.isCancelled, self.state == .processing else { return }
                 guard !raw.isEmpty else {
-                    self.overlay.flash(.error("Nichts verstanden"), duration: 1.2)
+                    // Mit dem Grund, wenn er bekannt ist: Bei geschlossenem
+                    // Deckel liefert das eingebaute Mikrofon digitale Stille,
+                    // ohne sich irgendwie auffällig zu verhalten.
+                    let reason = self.recorder.lastDeviceWasBuiltIn && AudioDevices.lidIsClosed()
+                        ? "Deckel zu — Mikrofon stumm"
+                        : "Nichts verstanden"
+                    self.overlay.flash(.error(reason), duration: reason.count > 20 ? 2.5 : 1.2)
                     self.finishToIdle()
                     return
                 }

@@ -24,6 +24,9 @@ final class MeetingController: ObservableObject {
     @Published private(set) var inputDeviceName: String?
     /// Meldung, wenn eine Spur dauerhaft ausgefallen ist — darf nicht still bleiben.
     @Published private(set) var channelWarning: String?
+    /// Meldung, wenn vom Mikrofon kein Ton mehr kommt. Getrennt von
+    /// `channelWarning`, damit sich beide nicht gegenseitig überschreiben.
+    @Published private(set) var microphoneWarning: String?
 
     private var meeting: MeetingMeta?
     private var startedAt = Date()
@@ -36,6 +39,19 @@ final class MeetingController: ObservableObject {
     private var timer: Timer?
     private var activity: NSObjectProtocol?
     private var captureRestarts = 0
+    /// Höchster Pegel seit der letzten Prüfung — Grundlage der Stille-Erkennung.
+    private var micPeakSinceCheck: Float = 0
+    private var systemPeakSinceCheck: Float = 0
+    private var micSilentSeconds = 0
+    private var micDeadSeconds = 0
+
+    /// Darunter gilt ein Pegel als Stille. Ein lebendiges Mikrofon liefert
+    /// immer ein Grundrauschen darüber.
+    private static let micSilenceThreshold: Float = 0.002
+    /// Kein einziges Signal: Das Gerät liefert gar nichts mehr.
+    private static let micDeadSecondsLimit = 20
+    /// Stille, während die Gegenseite spricht — dann hört uns niemand.
+    private static let micSilentSecondsLimit = 45
 
     private var languageCode: String { Settings.shared.localeIdentifier }
 
@@ -53,6 +69,12 @@ final class MeetingController: ObservableObject {
         partialOthers = ""
         elapsed = 0
         captureRestarts = 0
+        micPeakSinceCheck = 0
+        systemPeakSinceCheck = 0
+        micSilentSeconds = 0
+        micDeadSeconds = 0
+        microphoneWarning = nil
+        channelWarning = nil
         isRecording = true
 
         Task { @MainActor in
@@ -113,15 +135,16 @@ final class MeetingController: ObservableObject {
                     return
                 }
 
+                recorder.onEvent = { [weak self] message in
+                    Task { @MainActor in self?.appendLog(message) }
+                }
                 recorder.onRestartFailed = { [weak self] _ in
                     Task { @MainActor in self?.statusMessage = "Mikrofon verloren — Meeting beenden und neu starten" }
                 }
-                try recorder.start(
-                    deviceUID: Settings.shared.inputDeviceUID,
-                    onBuffer: { [weak mic] buffer in mic?.feed(buffer) },
-                    onLevel: { [weak self] level in
-                        Task { @MainActor in self?.micLevel = level }
-                    })
+                try startRecorder(deviceUID: Settings.shared.inputDeviceUID)
+                if recorder.isUsingBuiltInMicrophone, AudioDevices.lidIsClosed() {
+                    appendLog("WARNUNG: eingebautes Mikrofon bei geschlossenem Deckel — es liefert keinen Ton")
+                }
                 updateEchoRisk()
 
                 capture.onBuffer = { [weak self, weak system] buffer in
@@ -129,7 +152,10 @@ final class MeetingController: ObservableObject {
                     self?.audioWriter?.write(buffer)
                 }
                 capture.onLevel = { [weak self] level in
-                    Task { @MainActor in self?.systemLevel = level }
+                    Task { @MainActor in
+                        self?.systemLevel = level
+                        self?.systemPeakSinceCheck = max(self?.systemPeakSinceCheck ?? 0, level)
+                    }
                 }
                 capture.onStopped = { [weak self] error in
                     Task { @MainActor in self?.handleCaptureStopped(error) }
@@ -149,6 +175,48 @@ final class MeetingController: ObservableObject {
                 showAlert(title: "Meeting konnte nicht gestartet werden",
                           message: error.localizedDescription)
             }
+        }
+    }
+
+    private func startRecorder(deviceUID: String?) throws {
+        try recorder.start(
+            deviceUID: deviceUID,
+            onBuffer: { [weak self] buffer in self?.micChannel?.feed(buffer) },
+            onLevel: { [weak self] level in
+                Task { @MainActor in
+                    self?.micLevel = level
+                    self?.micPeakSinceCheck = max(self?.micPeakSinceCheck ?? 0, level)
+                }
+            })
+    }
+
+    /// Wechselt das Mikrofon mitten in der Aufzeichnung.
+    ///
+    /// Den Eingang stellt man oft erst beim Beitreten zum Call um. Ohne diese
+    /// Möglichkeit müsste man die laufende Aufzeichnung verwerfen und neu
+    /// beginnen — und genau dabei ist am 05.10. eine Stimme verloren gegangen.
+    func switchInput(to uid: String?) {
+        Settings.shared.inputDeviceUID = uid
+        guard isRecording else { return }
+        let name = uid.flatMap { AudioDevices.name(forUID: $0) } ?? "Systemstandard"
+        appendLog("Mikrofon wird auf \(name) umgestellt")
+        recorder.stop()
+        recorder.onEvent = { [weak self] message in
+            Task { @MainActor in self?.appendLog(message) }
+        }
+        recorder.onRestartFailed = { [weak self] _ in
+            Task { @MainActor in self?.statusMessage = "Mikrofon verloren — Meeting beenden und neu starten" }
+        }
+        do {
+            try startRecorder(deviceUID: uid)
+            micSilentSeconds = 0
+            micDeadSeconds = 0
+            microphoneWarning = nil
+            statusMessage = nil
+            updateEchoRisk()
+        } catch {
+            appendLog("WARNUNG: Umstellen auf \(name) fehlgeschlagen: \(error.localizedDescription)")
+            statusMessage = "Mikrofon „\(name)“ lässt sich nicht öffnen"
         }
     }
 
@@ -339,7 +407,9 @@ final class MeetingController: ObservableObject {
     /// Prüft, ob der Ton gerade über interne Lautsprecher läuft.
     private func updateEchoRisk() {
         echoRisk = AudioDevices.defaultOutputIsBuiltInSpeaker()
-        inputDeviceName = Settings.shared.inputDeviceUID.flatMap { AudioDevices.name(forUID: $0) }
+        // Der tatsächlich benutzte Eingang, nicht der eingestellte Wunsch.
+        inputDeviceName = recorder.currentDeviceName
+            ?? Settings.shared.inputDeviceUID.flatMap { AudioDevices.name(forUID: $0) }
     }
 
     /// SCK stops itself on display reconfiguration, screen lock or a revoked
@@ -377,6 +447,9 @@ final class MeetingController: ObservableObject {
         if let micChannel { _ = await micChannel.finish() }
         if let systemChannel { _ = await systemChannel.finish() }
         appendLog("Aufzeichnung beendet — Neustarts: Ich \(micChannel?.restartCount ?? 0), Andere \(systemChannel?.restartCount ?? 0)")
+        if let microphoneWarning {
+            appendLog("Offene Warnung beim Beenden: \(microphoneWarning)")
+        }
         micChannel = nil
         systemChannel = nil
         systemAudioActive = false
@@ -397,8 +470,53 @@ final class MeetingController: ObservableObject {
                 // Blockierte Erkennung erkennen und neu starten.
                 self.micChannel?.checkLiveness()
                 self.systemChannel?.checkLiveness()
+                self.checkMicrophoneSignal()
             }
         }
+    }
+
+    /// Wacht darüber, dass vom Mikrofon überhaupt Ton kommt.
+    ///
+    /// Am 05.10. blieb in einem Meeting die eigene Stimme komplett aus: Beim
+    /// Beitreten wurde auf ein Tischmikrofon gewechselt, die Engine las aber
+    /// weiter vom alten Gerät. Neun Minuten Gespräch, kein einziger eigener
+    /// Abschnitt — und kein Hinweis darauf. Das darf nicht noch einmal
+    /// unbemerkt bleiben.
+    private func checkMicrophoneSignal() {
+        let micPeak = micPeakSinceCheck
+        let systemPeak = systemPeakSinceCheck
+        micPeakSinceCheck = 0
+        systemPeakSinceCheck = 0
+
+        if micPeak <= 0 { micDeadSeconds += 1 } else { micDeadSeconds = 0 }
+        if micPeak < Self.micSilenceThreshold, systemPeak >= Self.micSilenceThreshold {
+            micSilentSeconds += 1
+        } else if micPeak >= Self.micSilenceThreshold {
+            micSilentSeconds = 0
+        }
+
+        let device = recorder.currentDeviceName ?? "Mikrofon"
+        // Der eindeutige Fall zuerst, mit der echten Begründung: Bei
+        // geschlossenem Deckel liefert das eingebaute Mikrofon digitale
+        // Stille, obwohl das System es als völlig normales Gerät meldet.
+        if recorder.isUsingBuiltInMicrophone, AudioDevices.lidIsClosed() {
+            warnAboutMicrophone("Der Deckel ist geschlossen — das eingebaute Mikrofon („\(device)“) liefert dann keinen Ton. Oben ein anderes Mikrofon wählen.")
+            return
+        }
+        if micDeadSeconds == Self.micDeadSecondsLimit {
+            warnAboutMicrophone("Vom Mikrofon („\(device)“) kommt kein Signal — Gerät in den Einstellungen prüfen")
+        } else if micSilentSeconds == Self.micSilentSecondsLimit {
+            warnAboutMicrophone("Das Mikrofon („\(device)“) hört dich nicht — die Gegenseite spricht, deine Spur bleibt stumm")
+        } else if micPeak >= Self.micSilenceThreshold, microphoneWarning != nil {
+            microphoneWarning = nil
+            appendLog("Mikrofon liefert wieder Ton (\(device))")
+        }
+    }
+
+    private func warnAboutMicrophone(_ message: String) {
+        guard microphoneWarning != message else { return }
+        microphoneWarning = message
+        appendLog("WARNUNG: \(message)")
     }
 
     private func stopTimer() {

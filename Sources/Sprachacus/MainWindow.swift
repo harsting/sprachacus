@@ -282,6 +282,7 @@ struct SettingsTab: View {
     @AppStorage("speakerDiarization") private var speakerDiarization = true
     @AppStorage("keepMeetingAudio") private var keepMeetingAudio = false
     @State private var inputDevices: [AudioDevices.Device] = []
+    @State private var builtInMicUnusable = false
 
     @State private var fmAvailable: Bool?
     @State private var claudePath: String?
@@ -324,6 +325,13 @@ struct SettingsTab: View {
                         Text(device.name).tag(device.uid)
                     }
                 }
+                if builtInMicUnusable {
+                    Label("Der Deckel ist geschlossen — das eingebaute Mikrofon liefert dann keinen Ton. Für Diktat und Meetings hier ein angeschlossenes Mikrofon wählen.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if !inputDeviceUID.isEmpty, !inputDevices.contains(where: { $0.uid == inputDeviceUID }) {
                     Label("Das gewählte Mikrofon ist gerade nicht angeschlossen — Sprachacus nutzt so lange den Systemstandard.",
                           systemImage: "exclamationmark.triangle.fill")
@@ -332,7 +340,10 @@ struct SettingsTab: View {
                 }
                 HStack {
                     Spacer()
-                    Button("Geräte neu einlesen") { inputDevices = AudioDevices.inputs() }
+                    Button("Geräte neu einlesen") {
+                        inputDevices = AudioDevices.inputs()
+                        checkBuiltInMic()
+                    }
                         .controlSize(.small)
                 }
             } header: {
@@ -480,8 +491,10 @@ struct SettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        .onChange(of: inputDeviceUID) { _, _ in checkBuiltInMic() }
         .task {
             inputDevices = AudioDevices.inputs()
+            checkBuiltInMic()
             checkAvailability()
             if testInput.isEmpty {
                 testInput = isGerman
@@ -489,6 +502,15 @@ struct SettingsTab: View {
                     : "um so I wanted to like say that we should uh meet tomorrow at ten I think"
             }
         }
+    }
+
+    /// Prüft, ob das wirksame Mikrofon gerade gar keinen Ton liefern kann.
+    private func checkBuiltInMic() {
+        guard AudioDevices.lidIsClosed() else { builtInMicUnusable = false; return }
+        let id = inputDeviceUID.isEmpty
+            ? AudioDevices.defaultInputID()
+            : AudioDevices.deviceID(forUID: inputDeviceUID)
+        builtInMicUnusable = id.map { AudioDevices.isBuiltIn($0) } ?? false
     }
 
     private func checkAvailability() {

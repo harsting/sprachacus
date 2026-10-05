@@ -7,9 +7,36 @@ import CoreAudio
 final class AudioRecorder {
     private var engine: AVAudioEngine?
     private var observer: NSObjectProtocol?
+    private var deviceObserver: Any?
     private var onBuffer: ((AVAudioPCMBuffer) -> Void)?
     private var onLevel: ((Float) -> Void)?
     private var deviceUID: String?
+    /// Gerät, auf das die laufende Engine gestartet wurde.
+    ///
+    /// Bewusst das *gewünschte* Gerät und nicht das, was die Engine
+    /// zurückmeldet: Folgt sie dem Systemstandard, hängt sie an einem privaten
+    /// Sammelgerät („CADefaultDeviceAggregate-…"), dessen ID nie einem echten
+    /// Gerät entspricht. Ein Vergleich damit hielte jeden Zustand für falsch
+    /// und würde die Engine endlos neu starten.
+    private var activeDeviceID: AudioDeviceID?
+    /// Verzögerte Prüfung nach einer Gerätemeldung.
+    private var pendingDeviceCheck: DispatchWorkItem?
+
+    /// Meldet nennenswerte Ereignisse (gewähltes Gerät, Wechsel, Fehlschläge)
+    /// nach außen. Im Meeting landen sie im Protokoll neben dem Transkript —
+    /// NSLog ist aus dieser App nicht auslesbar.
+    var onEvent: ((String) -> Void)?
+
+    /// Name des Geräts, von dem gerade aufgenommen wird.
+    var currentDeviceName: String? { activeDeviceID.flatMap { AudioDevices.name(forID: $0) } }
+
+    /// Läuft die Aufnahme über ein im Mac eingebautes Mikrofon? Bei
+    /// geschlossenem Deckel liefert das keinen Ton.
+    var isUsingBuiltInMicrophone: Bool { activeDeviceID.map { AudioDevices.isBuiltIn($0) } ?? false }
+
+    /// Dasselbe für das *zuletzt* benutzte Gerät — bleibt nach `stop()`
+    /// erhalten, damit sich ein leeres Ergebnis hinterher noch erklären lässt.
+    private(set) var lastDeviceWasBuiltIn = false
 
     /// Reports a failed recovery after an audio route change (e.g. AirPods
     /// connected mid-recording). The mic is dead at that point.
@@ -41,6 +68,14 @@ final class AudioRecorder {
         ) { [weak self] _ in
             DispatchQueue.main.async { self?.restartAfterConfigurationChange() }
         }
+
+        // Zusätzlich direkt an Core Audio horchen: Wechselt der Nutzer das
+        // Eingabegerät in den Systemeinstellungen oder im Meeting-Programm,
+        // bleibt die Engine sonst am alten Gerät — und nimmt im Zweifel
+        // Stille auf, ohne dass es jemand merkt.
+        deviceObserver = AudioDevices.observeInputChanges { [weak self] in
+            self?.scheduleDeviceCheck()
+        }
     }
 
     func stop() {
@@ -48,6 +83,9 @@ final class AudioRecorder {
             NotificationCenter.default.removeObserver(observer)
             self.observer = nil
         }
+        deviceObserver = nil
+        pendingDeviceCheck?.cancel()
+        pendingDeviceCheck = nil
         teardownEngine()
         onBuffer = nil
         onLevel = nil
@@ -58,8 +96,12 @@ final class AudioRecorder {
         let input = engine.inputNode
 
         // Must happen before the format is read and before the engine starts.
-        if let deviceUID, let deviceID = AudioDevices.deviceID(forUID: deviceUID) {
-            setInputDevice(deviceID, on: input)
+        if let deviceUID {
+            if let deviceID = AudioDevices.deviceID(forUID: deviceUID) {
+                setInputDevice(deviceID, on: input)
+            } else {
+                onEvent?("Gewähltes Mikrofon ist nicht angeschlossen — es gilt der Systemstandard")
+            }
         }
 
         let format = input.outputFormat(forBus: 0)
@@ -71,6 +113,48 @@ final class AudioRecorder {
         engine.prepare()
         try engine.start()
         self.engine = engine
+        activeDeviceID = desiredDeviceID()
+        lastDeviceWasBuiltIn = isUsingBuiltInMicrophone
+        onEvent?("Mikrofon aktiv: \(currentDeviceName ?? "unbekannt") — \(Int(format.sampleRate)) Hz, \(format.channelCount) Kanal(e)")
+    }
+
+    /// Welches Gerät die Engine benutzen *soll*: das fest gewählte, sonst das
+    /// aktuelle Standardgerät des Systems.
+    private func desiredDeviceID() -> AudioDeviceID? {
+        if let deviceUID, let id = AudioDevices.deviceID(forUID: deviceUID) { return id }
+        return AudioDevices.defaultInputID()
+    }
+
+    /// Verschiebt die Prüfung aus dem Core-Audio-Rückruf heraus.
+    ///
+    /// Zwingend: Core Audio ruft seine Beobachter auf, während es intern noch
+    /// Sperren hält. Wird aus dem Rückruf heraus eine AVAudioEngine angelegt,
+    /// blockiert der Hauptthread für immer — gemessen, mit genau diesem
+    /// Aufrufpfad. Die kurze Verzögerung bündelt außerdem die Schwärme von
+    /// Meldungen, die ein Gerätewechsel auslöst, zu einer einzigen Prüfung.
+    private func scheduleDeviceCheck() {
+        pendingDeviceCheck?.cancel()
+        let item = DispatchWorkItem { [weak self] in self?.followDeviceChange() }
+        pendingDeviceCheck = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: item)
+    }
+
+    /// Reagiert auf einen Gerätewechsel im System — aber nur, wenn die Engine
+    /// dadurch wirklich am falschen Gerät hängt. Sonst würde jedes Ein- und
+    /// Ausstecken irgendeines Geräts die Aufnahme unterbrechen.
+    private func followDeviceChange() {
+        guard engine != nil, onBuffer != nil else { return }
+        guard let desired = desiredDeviceID(), desired != activeDeviceID else { return }
+        let from = currentDeviceName ?? "unbekannt"
+        let to = AudioDevices.name(forID: desired) ?? "unbekannt"
+        onEvent?("Eingabegerät gewechselt: \(from) → \(to) — Aufnahme wird umgestellt")
+        teardownEngine()
+        do {
+            try startEngine()
+        } catch {
+            onEvent?("Umstellen auf \(to) fehlgeschlagen: \(error.localizedDescription)")
+            onRestartFailed?(error)
+        }
     }
 
     private func setInputDevice(_ deviceID: AudioDeviceID, on input: AVAudioInputNode) {
@@ -81,7 +165,7 @@ final class AudioRecorder {
                                           kAudioUnitScope_Global, 0,
                                           &id, UInt32(MemoryLayout<AudioDeviceID>.size))
         if status != noErr {
-            NSLog("AudioRecorder: Eingabegerät konnte nicht gesetzt werden (Status \(status)) — nutze Systemstandard")
+            onEvent?("Eingabegerät konnte nicht gesetzt werden (Status \(status)) — es gilt der Systemstandard")
         }
     }
 
@@ -90,18 +174,19 @@ final class AudioRecorder {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         self.engine = nil
+        activeDeviceID = nil
     }
 
     /// A fresh engine is more reliable than re-installing a tap on the old one
     /// after a configuration change.
     private func restartAfterConfigurationChange() {
         guard engine != nil, onBuffer != nil else { return }
-        NSLog("AudioRecorder: Audio-Konfiguration geändert — Engine wird neu gestartet")
+        onEvent?("Audio-Konfiguration geändert — Engine wird neu gestartet")
         teardownEngine()
         do {
             try startEngine()
         } catch {
-            NSLog("AudioRecorder: Neustart fehlgeschlagen: \(error.localizedDescription)")
+            onEvent?("Neustart des Mikrofons fehlgeschlagen: \(error.localizedDescription)")
             onRestartFailed?(error)
         }
     }

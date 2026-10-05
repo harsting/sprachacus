@@ -50,6 +50,8 @@ final class MeetingWindowController: NSObject, NSWindowDelegate {
 
 struct MeetingLiveView: View {
     @EnvironmentObject private var controller: MeetingController
+    @State private var inputs: [AudioDevices.Device] = AudioDevices.inputs()
+    @State private var selectedInput = Settings.shared.inputDeviceUID ?? ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -72,10 +74,45 @@ struct MeetingLiveView: View {
                                active: controller.systemAudioActive)
             }
 
+            // Den Eingang stellt man oft erst beim Beitreten zum Call um —
+            // das muss ohne Abbruch der Aufzeichnung gehen, und man muss sehen,
+            // welches Mikrofon gerade wirklich aufnimmt.
+            HStack(spacing: 6) {
+                Image(systemName: "mic")
+                    .foregroundStyle(.secondary)
+                Picker("Mikrofon", selection: $selectedInput) {
+                    Text("Systemstandard").tag("")
+                    ForEach(inputs) { device in
+                        Text(device.name).tag(device.uid)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                if let active = controller.inputDeviceName, selectedInput.isEmpty {
+                    Text("→ \(active)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .onChange(of: selectedInput) { _, new in
+                controller.switchInput(to: new.isEmpty ? nil : new)
+            }
+            .onChange(of: Int(controller.elapsed) / 10) { _, _ in
+                inputs = AudioDevices.inputs()
+            }
+
             if let warning = controller.channelWarning {
                 Label(warning + " — Ton wird weiter mitgeschnitten, Meeting besser neu starten.",
                       systemImage: "exclamationmark.octagon.fill")
                     .font(.caption.weight(.medium))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let warning = controller.microphoneWarning {
+                Label(warning, systemImage: "mic.slash.fill")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }

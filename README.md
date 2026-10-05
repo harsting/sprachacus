@@ -213,7 +213,11 @@ Wechselgespräch die Antwort vor der Frage. Muss eine Spur neu gestartet werden,
 währenddessen zwischengespeichert und danach nachgereicht; die Zeitachse läuft über den Neustart
 hinweg durch.
 
-**Mikrofon und Echo:** Unter Einstellungen → Mikrofon lässt sich ein festes Eingabegerät wählen (sonst folgt Sprachacus dem Systemstandard). Wichtig bei Meetings ohne Kopfhörer: Läuft der Ton über die Lautsprecher, hört das Mikrofon die Gegenseite mit und ihre Sätze landen doppelt im Transkript. Sprachacus verwirft deshalb Mikrofon-Abschnitte, die einem kurz zuvor gehörten Beitrag der Gegenseite stark ähneln, und das Meeting-Fenster warnt, wenn der Ton über interne Lautsprecher läuft. Für ein sauberes Transkript sind Kopfhörer die zuverlässigste Lösung.
+**Mikrofon:** Unter Einstellungen → Mikrofon lässt sich ein festes Eingabegerät wählen (sonst folgt Sprachacus dem Systemstandard — und zwar laufend: Wechselt man den Eingang mitten im Meeting, stellt Sprachacus die Aufnahme um). Im Meeting-Fenster steht zusätzlich eine Auswahl, denn den Eingang stellt man oft erst beim Beitreten zum Call um. Kommt vom Mikrofon kein Ton, warnt das Meeting-Fenster rot — nach 20 Sekunden ohne jedes Signal, oder nach 45 Sekunden Stille, während die Gegenseite spricht.
+
+**Geschlossener Deckel:** Am externen Bildschirm mit zugeklapptem MacBook liefert das **eingebaute Mikrofon digitale Stille** — gemessen 48.000 Abtastwerte pro Sekunde, alle exakt null. Core Audio meldet es trotzdem als lebendig, nicht stumm und mit normalem Eingangspegel, und es bleibt als Systemstandard wählbar. Sprachacus erkennt diesen Fall jetzt und sagt es: in den Einstellungen, im Meeting-Fenster und beim Diktat („Deckel zu — Mikrofon stumm" statt „Nichts verstanden").
+
+**Echo:** Wichtig bei Meetings ohne Kopfhörer: Läuft der Ton über die Lautsprecher, hört das Mikrofon die Gegenseite mit und ihre Sätze landen doppelt im Transkript. Sprachacus verwirft deshalb Mikrofon-Abschnitte, die einem kurz zuvor gehörten Beitrag der Gegenseite stark ähneln, und das Meeting-Fenster warnt, wenn der Ton über interne Lautsprecher läuft. Für ein sauberes Transkript sind Kopfhörer die zuverlässigste Lösung.
 
 **Warum keine Echo-Unterdrückung:** Apples Voice Processing (`setVoiceProcessingEnabled`) läge nahe, ist hier aber unbrauchbar: Gemessen schaltet es das systemweite Ausgabegerät um und senkt den Ton anderer Apps auf null — mitten im Meeting hört man die Gegenseite dann nicht mehr. Sprachacus fasst die Audio-Ausgabe deshalb grundsätzlich nicht an. Der Regressionstest dazu steckt in `AudioSafetyTest`.
 
@@ -244,7 +248,10 @@ defaults write com.marvinharst.sprachacus openTabOnLaunch -string meetings  # Fe
 defaults write com.marvinharst.sprachacus showOverlayDemo -bool YES        # Overlay ohne Aufnahme anzeigen
 defaults write com.marvinharst.sprachacus diarizerTestFile -string /pfad.wav  # Sprechertrennung an einer Datei prüfen
 defaults write com.marvinharst.sprachacus runAudioSafetyTest -bool YES     # prüft, ob die Aufnahme die Wiedergabe stört
+defaults write com.marvinharst.sprachacus runMicDeviceTest -bool YES       # 30 s Mikrofon-Protokoll: Gerät, Pegel, Anteil Null-Abtastwerte
 ```
+
+Der Mikrofon-Test schreibt nach `~/Library/Application Support/Sprachacus/mic-device-test.log` und zeigt, ob überhaupt Ton ankommt (`davon ≠ 0`) und ob ein Gerätewechsel übernommen wird. Optional `micDeviceTestUID` für ein festes Gerät und `micDeviceTestSeconds` für die Dauer.
 
 Ergebnisse der Sprechertrennung landen in `~/Library/Application Support/Sprachacus/diarizer.log`.
 

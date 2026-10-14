@@ -239,6 +239,22 @@ Drittelsekunde genau erkannt und wiederkehrende Stimmen zuverlässig wiedererkan
 ähnlichen Stimmen oder starker Überlappung können zwei Personen zusammenfallen. Auf dem Standard-
 Benchmark für Meetings liegt die Fehlerrate bei rund 20–25 %.
 
+## Wenn die Oberfläche steht
+
+Sprachacus überwacht seinen eigenen Hauptthread. Reagiert er länger als zehn
+Sekunden nicht, steht das mit Zeitstempel in
+`~/Library/Application Support/Sprachacus/hang.log`; nach einer Minute beendet
+sich die App selbst, damit kein unbedienbares Overlay auf dem Bildschirm
+zurückbleibt.
+
+Anlass war ein Ringschluss zwischen zwei Warteschlangen: Die interne
+Warteschlange der AVAudioEngine meldet eine Änderung der Audio-Konfiguration
+und wartet dabei auf den Hauptthread — der wartete zur selben Zeit beim
+Abbauen der Engine per `dispatch_sync` auf genau diese Warteschlange. Beide
+Seiten sind entkoppelt (Benachrichtigung ohne `queue: .main`, letzte Freigabe
+der Engine abseits des Hauptthreads); ein Belastungstest mit 16 Gerätewechseln
+unter laufender Aufnahme läuft seither durch.
+
 ## Diagnose
 
 ```bash

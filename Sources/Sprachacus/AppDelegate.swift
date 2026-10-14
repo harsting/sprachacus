@@ -11,6 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Als Erstes: Steht die Oberfläche je wieder, soll es nachweisbar sein
+        // und nicht in einem unbedienbaren Overlay enden.
+        MainThreadWatchdog.shared.start()
         setupStatusItem()
         setupMainMenu()
 

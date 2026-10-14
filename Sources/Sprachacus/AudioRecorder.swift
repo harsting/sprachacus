@@ -63,8 +63,18 @@ final class AudioRecorder {
         // Route changes (headphones in/out, sample-rate switch) invalidate the
         // tap format. React outside the notification handler — tearing the
         // engine down inside it is not allowed.
+        //
+        // Bewusst OHNE `queue: .main`: Mit einer Warteschlange liefert
+        // NotificationCenter über eine NSOperation aus und der *Absender*
+        // wartet, bis sie fertig ist. Die Meldung kommt aber aus der internen
+        // Warteschlange der AVAudioEngine — und deren Freigabe wartet
+        // umgekehrt per dispatch_sync auf genau diese Warteschlange. Ergebnis
+        // war ein Ringschluss, der den Hauptthread für immer anhielt: Das
+        // Overlay blieb stehen und ließ sich nicht mehr schließen. Hier wird
+        // die Meldung also auf dem Absender-Thread angenommen und nur die
+        // Arbeit auf den Hauptthread verschoben.
         observer = NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main
+            forName: .AVAudioEngineConfigurationChange, object: nil, queue: nil
         ) { [weak self] _ in
             DispatchQueue.main.async { self?.restartAfterConfigurationChange() }
         }
@@ -175,6 +185,13 @@ final class AudioRecorder {
         engine.stop()
         self.engine = nil
         activeDeviceID = nil
+        // Die letzte Freigabe absichtlich nicht auf dem Hauptthread:
+        // `AVAudioEngine.dealloc` wartet per dispatch_sync auf die eigene
+        // Warteschlange. Ist die gerade beschäftigt, steht sonst die ganze
+        // Bedienoberfläche. Zweiter Gurt zum Hosenträger oben.
+        DispatchQueue.global(qos: .utility).async {
+            withExtendedLifetime(engine) {}
+        }
     }
 
     /// A fresh engine is more reliable than re-installing a tap on the old one

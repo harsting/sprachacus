@@ -25,10 +25,24 @@ final class MainThreadWatchdog {
     private static let tickInterval: TimeInterval = 1
 
     private let lock = NSLock()
-    private var lastTick = Date()
+    /// Zeitpunkt des letzten Ticks als **Betriebszeit**, nicht als Wanduhr.
+    ///
+    /// Wichtig: `mach_absolute_time` — die Grundlage von `DispatchTime` — steht
+    /// im Ruhezustand still, die Wanduhr läuft weiter. Mit `Date()` sah ein
+    /// zugeklappter Mac nach dem Aufwachen wie ein Hänger aus: Am 14.10. hat
+    /// sich die App dadurch direkt nach dem Aufwachen selbst beendet
+    /// („Hauptthread steht seit 920 s"), obwohl nur der Mac geschlafen hat.
+    private var lastTick = DispatchTime.now().uptimeNanoseconds
     private var reportedHang = false
     private var timer: Timer?
     private var checker: DispatchSourceTimer?
+    private var wakeObserver: NSObjectProtocol?
+
+    private static func seconds(since start: UInt64) -> TimeInterval {
+        let now = DispatchTime.now().uptimeNanoseconds
+        guard now > start else { return 0 }
+        return TimeInterval(now - start) / 1_000_000_000
+    }
 
     func start() {
         // `.common` statt `.default`: Sonst zählte jeder modale Dialog und
@@ -38,6 +52,18 @@ final class MainThreadWatchdog {
         }
         RunLoop.main.add(ticker, forMode: .common)
         self.timer = ticker
+
+        // Nach dem Aufwachen bewusst neu anfangen — unabhängig von der Uhr,
+        // damit auch ein Sonderfall der Zeitmessung nicht zum Fehlalarm führt.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.lastTick = DispatchTime.now().uptimeNanoseconds
+            self.reportedHang = false
+            self.lock.unlock()
+        }
 
         let checker = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "sprachacus.watchdog"))
         checker.schedule(deadline: .now() + 2, repeating: 2)
@@ -49,8 +75,8 @@ final class MainThreadWatchdog {
     private func tick() {
         lock.lock()
         let wasHanging = reportedHang
-        let stuckFor = Date().timeIntervalSince(lastTick)
-        lastTick = Date()
+        let stuckFor = Self.seconds(since: lastTick)
+        lastTick = DispatchTime.now().uptimeNanoseconds
         reportedHang = false
         lock.unlock()
         if wasHanging {
@@ -60,7 +86,7 @@ final class MainThreadWatchdog {
 
     private func check() {
         lock.lock()
-        let age = Date().timeIntervalSince(lastTick)
+        let age = Self.seconds(since: lastTick)
         let alreadyReported = reportedHang
         if age > Self.warnAfter { reportedHang = true }
         lock.unlock()

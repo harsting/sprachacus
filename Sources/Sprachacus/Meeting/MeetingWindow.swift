@@ -51,7 +51,7 @@ final class MeetingWindowController: NSObject, NSWindowDelegate {
 struct MeetingLiveView: View {
     @EnvironmentObject private var controller: MeetingController
     @State private var inputs: [AudioDevices.Device] = AudioDevices.inputs()
-    @State private var selectedInput = Settings.shared.inputDeviceUID ?? ""
+    @State private var selectedInput = Settings.shared.inputDevicePriority.first ?? ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

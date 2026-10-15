@@ -24,6 +24,18 @@ enum AudioDevices {
         inputs().first { $0.uid == uid }?.id
     }
 
+    /// Ist das ein virtuelles Gerät (Loopback, Sammelgerät, Treiber einer
+    /// anderen App)? Solche Geräte liefern fremden Ton, nicht die eigene
+    /// Stimme — „Microsoft Teams Audio" etwa den Systemton. Beim automatischen
+    /// Ausweichen müssen sie deshalb außen vor bleiben.
+    static func isVirtual(_ id: AudioDeviceID) -> Bool {
+        let type = transportType(of: id)
+        return type == kAudioDeviceTransportTypeVirtual
+            || type == kAudioDeviceTransportTypeAggregate
+            || type == kAudioDeviceTransportTypeAutoAggregate
+            || type == kAudioDeviceTransportTypeUnknown
+    }
+
     /// Ist dieses Gerät im Mac eingebaut?
     static func isBuiltIn(_ id: AudioDeviceID) -> Bool {
         transportType(of: id) == kAudioDeviceTransportTypeBuiltIn

@@ -42,7 +42,7 @@ enum AudioSafetyTest {
         var deviceDuring = deviceBefore
         let recorder = AudioRecorder()
         do {
-            try recorder.start(deviceUID: Settings.shared.inputDeviceUID,
+            try recorder.start(preferredUIDs: Settings.shared.inputDevicePriority,
                                onBuffer: { _ in }, onLevel: { _ in })
             deviceDuring = AudioDevices.defaultOutputName() ?? "?"
             log("Mikrofonaufnahme läuft — Ausgabegerät jetzt: \(deviceDuring)")

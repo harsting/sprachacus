@@ -53,6 +53,46 @@ final class Settings {
         set { defaults.set(newValue, forKey: "userName") }
     }
 
+    /// Wunschreihenfolge der Mikrofone, beste zuerst (UIDs).
+    ///
+    /// Sprachacus nimmt das erste Gerät dieser Liste, das angeschlossen ist
+    /// **und wirklich Ton liefert**. Beides ist nötig: Gemessen liefern sowohl
+    /// das eingebaute Mikrofon bei geschlossenem Deckel als auch die AirPods
+    /// Max digitale Stille, obwohl Core Audio sie als völlig normale Geräte
+    /// meldet — angeschlossen, nicht stumm, Eingangspegel 1,0.
+    var inputDevicePriority: [String] {
+        get {
+            if let list = defaults.array(forKey: "inputDevicePriority") as? [String] {
+                return list.filter { !$0.isEmpty }
+            }
+            // Übernahme der alten Einstellung „ein festes Gerät".
+            if let single = inputDeviceUID { return [single] }
+            return []
+        }
+        set { defaults.set(newValue.filter { !$0.isEmpty }, forKey: "inputDevicePriority") }
+    }
+
+    /// Zuletzt gesehene Namen zu den UIDs — damit ein abgezogenes Gerät in der
+    /// Liste nicht als Zeichensalat steht.
+    var rememberedDeviceNames: [String: String] {
+        get { (defaults.dictionary(forKey: "deviceNames") as? [String: String]) ?? [:] }
+        set { defaults.set(newValue, forKey: "deviceNames") }
+    }
+
+    func rememberName(_ name: String, forUID uid: String) {
+        var names = rememberedDeviceNames
+        guard names[uid] != name else { return }
+        names[uid] = name
+        rememberedDeviceNames = names
+    }
+
+    /// Setzt ein Gerät an die erste Stelle der Wunschreihenfolge.
+    func preferInputDevice(_ uid: String) {
+        var list = inputDevicePriority.filter { $0 != uid }
+        list.insert(uid, at: 0)
+        inputDevicePriority = list
+    }
+
     /// UID des Mikrofons für Diktat und Meetings. Leer = Systemstandard.
     /// Bewusst die UID und nicht die numerische ID: Letztere ändert sich beim
     /// Neuanstecken des Geräts.

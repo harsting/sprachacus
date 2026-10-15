@@ -278,10 +278,10 @@ struct SettingsTab: View {
     @AppStorage("assistProvider") private var assistProviderRaw = AssistProviderChoice.auto.rawValue
     @AppStorage("userName") private var userName = ""
     @AppStorage("vocabulary") private var vocabulary = ""
-    @AppStorage("inputDeviceUID") private var inputDeviceUID = ""
     @AppStorage("speakerDiarization") private var speakerDiarization = true
     @AppStorage("keepMeetingAudio") private var keepMeetingAudio = false
     @State private var inputDevices: [AudioDevices.Device] = []
+    @State private var priority: [String] = Settings.shared.inputDevicePriority
     @State private var builtInMicUnusable = false
 
     @State private var fmAvailable: Bool?
@@ -319,37 +319,57 @@ struct SettingsTab: View {
             }
 
             Section {
-                Picker("Eingang", selection: $inputDeviceUID) {
-                    Text("Systemstandard").tag("")
-                    ForEach(inputDevices) { device in
-                        Text(device.name).tag(device.uid)
-                    }
+                if priority.isEmpty {
+                    Text("Noch keine Reihenfolge festgelegt — Sprachacus nimmt den Systemstandard.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+                ForEach(Array(priority.enumerated()), id: \.element) { index, uid in
+                    HStack(spacing: 8) {
+                        Text("\(index + 1).")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        Text(deviceName(for: uid))
+                        if !inputDevices.contains(where: { $0.uid == uid }) {
+                            Text("nicht angeschlossen")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { move(index, by: -1) } label: { Image(systemName: "chevron.up") }
+                            .disabled(index == 0)
+                        Button { move(index, by: 1) } label: { Image(systemName: "chevron.down") }
+                            .disabled(index == priority.count - 1)
+                        Button { remove(uid) } label: { Image(systemName: "xmark") }
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                }
+
+                HStack {
+                    Menu("Mikrofon hinzufügen") {
+                        ForEach(inputDevices.filter { !priority.contains($0.uid) }) { device in
+                            Button(device.name) { add(device) }
+                        }
+                    }
+                    .fixedSize()
+                    .disabled(inputDevices.allSatisfy { priority.contains($0.uid) })
+                    Spacer()
+                    Button("Geräte neu einlesen") { reloadDevices() }
+                        .controlSize(.small)
+                }
+
                 if builtInMicUnusable {
-                    Label("Der Deckel ist geschlossen — das eingebaute Mikrofon liefert dann keinen Ton. Für Diktat und Meetings hier ein angeschlossenes Mikrofon wählen.",
+                    Label("Der Deckel ist geschlossen — das eingebaute Mikrofon liefert dann keinen Ton. Setz ein angeschlossenes Mikrofon nach oben.",
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if !inputDeviceUID.isEmpty, !inputDevices.contains(where: { $0.uid == inputDeviceUID }) {
-                    Label("Das gewählte Mikrofon ist gerade nicht angeschlossen — Sprachacus nutzt so lange den Systemstandard.",
-                          systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-                HStack {
-                    Spacer()
-                    Button("Geräte neu einlesen") {
-                        inputDevices = AudioDevices.inputs()
-                        checkBuiltInMic()
-                    }
-                        .controlSize(.small)
-                }
             } header: {
                 Text("Mikrofon")
             } footer: {
-                Text("Legt fest, worüber deine eigene Stimme aufgenommen wird — für Diktat und für den „Ich“-Kanal in Meetings.")
+                Text("Sprachacus nimmt das oberste Gerät, das angeschlossen ist **und wirklich Ton liefert** — sonst das nächste. Letzteres ist nötig, weil manche Geräte stumm bleiben, ohne es zu zeigen: das eingebaute Mikrofon bei geschlossenem Deckel, gemessen auch die AirPods Max. Steht hier nichts, gilt der Systemstandard.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -491,10 +511,9 @@ struct SettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .onChange(of: inputDeviceUID) { _, _ in checkBuiltInMic() }
         .task {
-            inputDevices = AudioDevices.inputs()
-            checkBuiltInMic()
+            reloadDevices()
+            priority = Settings.shared.inputDevicePriority
             checkAvailability()
             if testInput.isEmpty {
                 testInput = isGerman
@@ -507,10 +526,45 @@ struct SettingsTab: View {
     /// Prüft, ob das wirksame Mikrofon gerade gar keinen Ton liefern kann.
     private func checkBuiltInMic() {
         guard AudioDevices.lidIsClosed() else { builtInMicUnusable = false; return }
-        let id = inputDeviceUID.isEmpty
-            ? AudioDevices.defaultInputID()
-            : AudioDevices.deviceID(forUID: inputDeviceUID)
+        let preferred = priority.compactMap { uid in inputDevices.first { $0.uid == uid } }
+        let id = preferred.first?.id ?? AudioDevices.defaultInputID()
         builtInMicUnusable = id.map { AudioDevices.isBuiltIn($0) } ?? false
+    }
+
+    private func deviceName(for uid: String) -> String {
+        inputDevices.first { $0.uid == uid }?.name
+            ?? Settings.shared.rememberedDeviceNames[uid]
+            ?? uid
+    }
+
+    private func reloadDevices() {
+        inputDevices = AudioDevices.inputs()
+        for device in inputDevices { Settings.shared.rememberName(device.name, forUID: device.uid) }
+        checkBuiltInMic()
+    }
+
+    private func savePriority() {
+        Settings.shared.inputDevicePriority = priority
+        checkBuiltInMic()
+    }
+
+    private func move(_ index: Int, by offset: Int) {
+        let target = index + offset
+        guard priority.indices.contains(index), priority.indices.contains(target) else { return }
+        priority.swapAt(index, target)
+        savePriority()
+    }
+
+    private func remove(_ uid: String) {
+        priority.removeAll { $0 == uid }
+        savePriority()
+    }
+
+    private func add(_ device: AudioDevices.Device) {
+        guard !priority.contains(device.uid) else { return }
+        Settings.shared.rememberName(device.name, forUID: device.uid)
+        priority.append(device.uid)
+        savePriority()
     }
 
     private func checkAvailability() {

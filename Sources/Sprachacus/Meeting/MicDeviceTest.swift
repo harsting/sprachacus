@@ -43,7 +43,18 @@ enum MicDeviceTest {
         let seconds = max(5, UserDefaults.standard.object(forKey: "micDeviceTestSeconds") as? Int ?? 30)
         let systemDefault = AudioDevices.defaultInputID().flatMap { AudioDevices.name(forID: $0) } ?? "?"
         log("Start — Standardeingang laut System: \(systemDefault)")
-        log("Festes Gerät: \(pinned.flatMap { AudioDevices.name(forUID: $0) } ?? "keines (Systemstandard)")")
+        let status: String
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: status = "erteilt"
+        case .denied: status = "VERWEIGERT"
+        case .restricted: status = "EINGESCHRÄNKT"
+        case .notDetermined: status = "NOCH NICHT GEFRAGT"
+        @unknown default: status = "unbekannt"
+        }
+        log("Mikrofonberechtigung: \(status)")
+        let wishlist = Settings.shared.inputDevicePriority.map { AudioDevices.name(forUID: $0) ?? "(nicht angeschlossen)" }
+        log("Festes Gerät: \(pinned.flatMap { AudioDevices.name(forUID: $0) } ?? "keines")")
+        log("Wunschreihenfolge: \(wishlist.isEmpty ? "leer → Systemstandard" : wishlist.joined(separator: " → "))")
 
         let recorder = AudioRecorder()
         recorder.onEvent = { log("EREIGNIS: \($0)") }
@@ -53,7 +64,9 @@ enum MicDeviceTest {
         nonisolated(unsafe) var nonzero = 0
         do {
             try recorder.start(
-                deviceUID: pinned,
+                // Ohne festes Gerät genau die Reihenfolge, die auch Diktat
+                // und Meetings benutzen.
+                preferredUIDs: pinned.map { [$0] } ?? Settings.shared.inputDevicePriority,
                 onBuffer: { buffer in
                     guard let data = buffer.floatChannelData?[0] else { return }
                     for index in 0..<Int(buffer.frameLength) where data[index] != 0 { nonzero += 1 }

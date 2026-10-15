@@ -90,7 +90,9 @@ final class MeetingController: ObservableObject {
                 startedAt = Date()
 
                 openLog(for: meeting.id)
-                appendLog("Meeting gestartet — Sprache \(languageCode), Mikrofon \(AudioDevices.name(forUID: Settings.shared.inputDeviceUID ?? "") ?? "Systemstandard")")
+                let wishlist = Settings.shared.inputDevicePriority
+                    .map { AudioDevices.name(forUID: $0) ?? "(nicht angeschlossen)" }
+                appendLog("Meeting gestartet — Sprache \(languageCode), Mikrofon-Reihenfolge: \(wishlist.isEmpty ? "Systemstandard" : wishlist.joined(separator: " → "))")
 
                 // Mitschnitt der Gegenseite: Grundlage der Sprechertrennung.
                 // Läuft bewusst unabhängig von der Erkennung — fällt die aus,
@@ -141,7 +143,7 @@ final class MeetingController: ObservableObject {
                 recorder.onRestartFailed = { [weak self] _ in
                     Task { @MainActor in self?.statusMessage = "Mikrofon verloren — Meeting beenden und neu starten" }
                 }
-                try startRecorder(deviceUID: Settings.shared.inputDeviceUID)
+                try startRecorder(preferredUIDs: Settings.shared.inputDevicePriority)
                 if recorder.isUsingBuiltInMicrophone, AudioDevices.lidIsClosed() {
                     appendLog("WARNUNG: eingebautes Mikrofon bei geschlossenem Deckel — es liefert keinen Ton")
                 }
@@ -178,9 +180,9 @@ final class MeetingController: ObservableObject {
         }
     }
 
-    private func startRecorder(deviceUID: String?) throws {
+    private func startRecorder(preferredUIDs: [String]) throws {
         try recorder.start(
-            deviceUID: deviceUID,
+            preferredUIDs: preferredUIDs,
             onBuffer: { [weak self] buffer in self?.micChannel?.feed(buffer) },
             onLevel: { [weak self] level in
                 Task { @MainActor in
@@ -195,8 +197,11 @@ final class MeetingController: ObservableObject {
     /// Den Eingang stellt man oft erst beim Beitreten zum Call um. Ohne diese
     /// Möglichkeit müsste man die laufende Aufzeichnung verwerfen und neu
     /// beginnen — und genau dabei ist am 05.10. eine Stimme verloren gegangen.
+    ///
+    /// Die Wahl gilt ab sofort als erste Wahl, nicht nur für dieses Meeting:
+    /// Was man hier auswählt, ist das Mikrofon, das man benutzen will.
     func switchInput(to uid: String?) {
-        Settings.shared.inputDeviceUID = uid
+        if let uid { Settings.shared.preferInputDevice(uid) }
         guard isRecording else { return }
         let name = uid.flatMap { AudioDevices.name(forUID: $0) } ?? "Systemstandard"
         appendLog("Mikrofon wird auf \(name) umgestellt")
@@ -208,7 +213,7 @@ final class MeetingController: ObservableObject {
             Task { @MainActor in self?.statusMessage = "Mikrofon verloren — Meeting beenden und neu starten" }
         }
         do {
-            try startRecorder(deviceUID: uid)
+            try startRecorder(preferredUIDs: Settings.shared.inputDevicePriority)
             micSilentSeconds = 0
             micDeadSeconds = 0
             microphoneWarning = nil
@@ -409,7 +414,7 @@ final class MeetingController: ObservableObject {
         echoRisk = AudioDevices.defaultOutputIsBuiltInSpeaker()
         // Der tatsächlich benutzte Eingang, nicht der eingestellte Wunsch.
         inputDeviceName = recorder.currentDeviceName
-            ?? Settings.shared.inputDeviceUID.flatMap { AudioDevices.name(forUID: $0) }
+            ?? Settings.shared.inputDevicePriority.first.flatMap { AudioDevices.name(forUID: $0) }
     }
 
     /// SCK stops itself on display reconfiguration, screen lock or a revoked

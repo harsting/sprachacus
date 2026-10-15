@@ -121,7 +121,7 @@ final class DictationController {
                     return
                 }
                 try self.recorder.start(
-                    deviceUID: Settings.shared.inputDeviceUID,
+                    preferredUIDs: Settings.shared.inputDevicePriority,
                     onBuffer: { [weak transcriber] buffer in transcriber?.feed(buffer) },
                     onLevel: { [weak self] level in
                         Task { @MainActor in self?.overlay.model.pushLevel(level) }

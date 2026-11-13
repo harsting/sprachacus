@@ -68,7 +68,7 @@ Ohne beide KI-Optionen funktioniert das reine Diktat weiterhin — der Text wird
 | System-Ton (Meetings) | ScreenCaptureKit, nur Audio | 0 € |
 | Diktat-Optimierung | Apple Intelligence (lokal) → Claude Code CLI (Haiku) → Rohtext | 0 € / im Claude-Abo |
 | Assist & Meeting-Zusammenfassung | Claude Code CLI (Haiku) → Apple Intelligence | im Claude-Abo |
-| Einfügen | Zwischenablage + simuliertes ⌘V, Zwischenablage wird danach wiederhergestellt | — |
+| Einfügen | Zwischenablage + simuliertes ⌘V, Zwischenablage kommt danach zurück | — |
 
 Die KI-Optimierung korrigiert Grammatik/Zeichensetzung und entfernt Füllwörter („ähm", „halt", …). Fällt eine Stufe aus (kein Apple Intelligence, kein Netz, …), greift automatisch die nächste — **das Einfügen scheitert nie** an der Optimierung.
 
@@ -192,6 +192,20 @@ Sources/Sprachacus/
 └── Meeting/                   # SystemAudioCapture (ScreenCaptureKit),
                                # Controller, Store (JSONL), Summarizer, UI
 ```
+
+## Einfügen und Zwischenablage
+
+Sprachacus legt den fertigen Text in die Zwischenablage, drückt ⌘V für dich und stellt danach
+deine vorherige Zwischenablage wieder her. Zwei Stellen waren daran heikel, beide abgesichert:
+
+- **Vor dem ⌘V wird nachgelesen**, ob der neue Text wirklich in der Zwischenablage steht. Hält eine
+  andere App sie gerade belegt, schlägt das Schreiben fehl — vorher wurde dann der *alte* Inhalt
+  eingefügt. Jetzt wird es bis zu fünfmal versucht; klappt es nicht, wird gar nicht erst ⌘V
+  gedrückt, sondern „Zwischenablage ist blockiert" gemeldet. Der Text steht im Verlauf.
+- **Zurückgestellt wird erst, wenn der Text angekommen ist.** Sprachacus sieht dafür über die
+  Bedienungshilfen am Eingabefeld nach, ob sich etwas getan hat, und wartet sonst bis zu drei
+  Sekunden. Die vorherige feste Frist von 0,6 Sekunden war bei langsamen Apps zu kurz: Die App las
+  die Zwischenablage erst danach — und fügte den wiederhergestellten alten Text ein.
 
 ## Troubleshooting
 

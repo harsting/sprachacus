@@ -306,14 +306,41 @@ struct SettingsTab: View {
             }
 
             Section {
-                TextField("Begriffe", text: $vocabulary, axis: .vertical)
-                    .lineLimit(3...8)
+                // Bewusst ein TextEditor und kein TextField: In einem
+                // Formular beendet die Eingabetaste ein TextField, statt eine
+                // Zeile anzufangen — eine Liste ließ sich damit nicht
+                // eingeben.
+                TextEditor(text: $vocabulary)
                     .font(.system(.body, design: .monospaced))
-                    .labelsHidden()
+                    .frame(minHeight: 110, maxHeight: 220)
+                    .scrollContentBackground(.hidden)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(nsColor: .textBackgroundColor)))
+                    .overlay(RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(nsColor: .separatorColor)))
+
+                let terms = Settings.parseVocabulary(vocabulary)
+                HStack {
+                    Text(terms.isEmpty
+                         ? "Noch keine Begriffe"
+                         : "\(terms.count) Begriff\(terms.count == 1 ? "" : "e"): \(terms.prefix(6).joined(separator: " · "))\(terms.count > 6 ? " …" : "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+                if terms.count >= Settings.maximumVocabularyTerms {
+                    Label("Mehr als \(Settings.maximumVocabularyTerms) Begriffe werden nicht berücksichtigt — eine sehr lange Liste verwässert die Gewichtung.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } header: {
                 Text("Eigene Begriffe")
             } footer: {
-                Text("Namen, Kürzel, Produkt- und Standnummern — eine pro Zeile oder mit Komma getrennt. Genau solche Wörter überhört die Spracherkennung am ehesten, weil sie in keinem Wörterbuch stehen. Was hier steht, wird bevorzugt erkannt und von der KI-Korrektur nicht mehr „verbessert“.")
+                Text("Firmennamen, Kürzel, Produkt- und Standnummern — **eine pro Zeile, Komma oder Semikolon gehen auch**. Genau solche Wörter überhört die Spracherkennung am ehesten, weil sie in keinem Wörterbuch stehen. Was hier steht, wird bevorzugt erkannt und von der KI-Korrektur nicht mehr „verbessert“. Die Zeile darunter zeigt, was Sprachacus daraus gelesen hat.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

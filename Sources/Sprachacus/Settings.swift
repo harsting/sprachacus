@@ -115,13 +115,17 @@ final class Settings {
 
     /// Das Vokabular als Liste. Trennt an Zeilenumbrüchen, Kommas und
     /// Semikola, damit es egal ist, wie man es hinschreibt.
-    var vocabularyTerms: [String] {
+    var vocabularyTerms: [String] { Self.parseVocabulary(vocabulary) }
+
+    /// Zerlegt die Eingabe in Begriffe. Als Trenner gelten Zeilenumbruch,
+    /// Komma und Semikolon — damit es egal ist, wie man es hinschreibt.
+    static func parseVocabulary(_ text: String) -> [String] {
         var seen = Set<String>()
-        return vocabulary
+        return text
             .components(separatedBy: CharacterSet(charactersIn: "\n,;"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-            .prefix(Self.maximumVocabularyTerms)
+            .prefix(maximumVocabularyTerms)
             .map { $0 }
     }
 

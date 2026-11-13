@@ -186,6 +186,9 @@ final class DictationController {
                     NSLog("Refined via \(refinerName): \(refined.prefix(80))")
                     HistoryStore.shared.add(raw: raw, refined: refined,
                                             refinerName: refinerName, languageCode: languageCode)
+                    self.paster.onFailure = { [weak self] reason in
+                        self?.overlay.flash(.error(reason), duration: 2.5)
+                    }
                     self.paster.paste(refined)
                     self.overlay.flash(.success)
                 case .assist(let context):

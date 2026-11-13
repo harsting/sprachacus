@@ -170,15 +170,24 @@ Sie wirkt an drei Stellen:
 - Die Spracherkennung bekommt die Liste als Kontext mit (`AnalysisContext.contextualStrings`) und
   bevorzugt diese Schreibweisen. Das ist eine Gewichtung, keine Garantie — bei deutlich
   abweichender Aussprache hilft sie nicht.
-- **Die Schreibweise wird am Ende hart gesetzt.** Weder die Erkennung noch das Sprachmodell halten
-  sich zuverlässig daran: Aus „21Dx Tool" wurde im Betrieb „21DX Tool". Deshalb werden die Begriffe
-  im fertigen Text ersetzt — nur Groß- und Kleinschreibung, nur an Wortgrenzen, längere Begriffe
-  zuerst. Das gilt für Diktat, Assist und Meeting-Transkripte.
-- **Knappe Verhörer werden mitkorrigiert.** Das Modell schrieb „Doctevo" statt „doctevio" — ein
-  fehlender Buchstabe, da hilft Groß-/Kleinschreibung nicht. Begriffe ab sechs Zeichen werden
-  deshalb auch bei einem Zeichen Abstand ersetzt, aber nie dort, wo das gefundene Wort mit dem
-  Begriff anfängt: „Rentokils" bleibt der Genitiv von „Rentokil" und wird nicht zurückgekürzt.
-  Gegengeprüft, dass „Mobiliar", „Direktor" und „Doktorin" unberührt bleiben.
+- **Die Schreibweise wird hart gesetzt** — einmal vor der KI-Korrektur und einmal danach. Weder die
+  Erkennung noch das Sprachmodell halten sich zuverlässig daran: Aus „21Dx Tool" wurde im Betrieb
+  „21DX Tool". Deshalb werden die Begriffe ersetzt — nur an Wortgrenzen, längere Begriffe zuerst.
+  Vor der Korrektur, weil ein Sprachmodell aus einem Verhörer bereitwillig etwas baut, das nach
+  richtigem Deutsch aussieht; danach, weil es die Schreibweise trotzdem gern anpasst. Das gilt für
+  Diktat, Assist und Meeting-Transkripte.
+- **Auch anders getrennt wird gefunden.** Die Erkennung schrieb „21 DX" statt „21Dx". Ein Begriff
+  wird deshalb dort flexibel gesucht, wo gern ein Leerzeichen hineinrutscht: zwischen Zahl und
+  Buchstabe, beim Wechsel von klein auf groß und am Bindestrich. „21 DX", „21-dx" und „Staff
+  Connect" landen damit bei „21Dx" und „StaffConnect".
+- **Verhörer werden mitkorrigiert.** Die Erkennung schrieb „Toktavio" statt „doctevio" — drei
+  Buchstaben Abstand, da hilft Groß-/Kleinschreibung nicht. Begriffe ab sechs Zeichen werden
+  deshalb auf ihren Klang reduziert (d/t, g/c/k, b/p, w/f/v, s/z klingen gleich, Umlaute
+  aufgelöst) und bei einem Laut Abstand ersetzt. Vokale bleiben unangetastet, sonst rückt zu vieles
+  zu nah zusammen — „Mahler" wäre sonst „Müller". Nie ersetzt wird dort, wo das gefundene Wort mit
+  dem Begriff anfängt: „Rentokils" bleibt der Genitiv von „Rentokil". Gegengeprüft, dass
+  „Oktavio Paz", „der Wagen", „die Direktive", „Mobiliar", „Direktor" und „Doktorin" unberührt
+  bleiben.
 - Die KI-Korrektur beim Diktat bekommt die Liste als feste Regel: Sie darf diese Begriffe nicht
   „verbessern" und setzt erkennbar verhörte Fassungen zurück (getestet: „Rento Kiel" → „Rentokil").
 - Die Meeting-Zusammenfassung schreibt sie richtig, auch wenn im Transkript eine verhörte Fassung

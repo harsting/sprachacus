@@ -185,10 +185,16 @@ struct RefinerChain {
     ///   die Korrektur soll trotzdem nicht verloren gehen.
     func refine(_ raw: String, languageCode: String,
                 onLateResult: ((String, String) -> Void)? = nil) async -> (text: String, refinerName: String) {
-        let (text, name) = await decide(raw, languageCode: languageCode, onLateResult: onLateResult)
-        // Zum Schluss die hinterlegten Schreibweisen durchsetzen — weder die
-        // Erkennung noch das Sprachmodell halten sich zuverlässig daran.
-        return (VocabularySpelling.apply(text, terms: Settings.shared.vocabularyTerms), name)
+        let terms = Settings.shared.vocabularyTerms
+        // Schon vor der Korrektur: Sieht das Sprachmodell einen Verhörer wie
+        // „Toktavio", baut es daraus bereitwillig etwas, das nach richtigem
+        // Deutsch aussieht. Mit der richtigen Schreibweise im Transkript
+        // bleibt der Name, wie er gehört.
+        let vorbereitet = VocabularySpelling.apply(raw, terms: terms)
+        let (text, name) = await decide(vorbereitet, languageCode: languageCode, onLateResult: onLateResult)
+        // Und zum Schluss noch einmal — weder die Erkennung noch das
+        // Sprachmodell halten sich zuverlässig daran.
+        return (VocabularySpelling.apply(text, terms: terms), name)
     }
 
     private func decide(_ raw: String, languageCode: String,

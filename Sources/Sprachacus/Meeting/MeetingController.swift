@@ -342,9 +342,12 @@ final class MeetingController: ObservableObject {
         logHandle = nil
     }
 
-    private func record(_ text: String, from source: MeetingSegment.Source,
+    private func record(_ rawText: String, from source: MeetingSegment.Source,
                         start: TimeInterval, end: TimeInterval) {
-        guard let meeting, !text.isEmpty else { return }
+        guard let meeting, !rawText.isEmpty else { return }
+        // Eigene Begriffe in der hinterlegten Schreibweise — die Erkennung
+        // schreibt Kürzel sonst nach eigenem Gutdünken („21DX" statt „21Dx").
+        let text = VocabularySpelling.apply(rawText, terms: Settings.shared.vocabularyTerms)
         // Zeitachse der Tonspur, nicht Wanduhr — nur so passen Transkript und
         // Sprechertrennung zusammen.
         let time = start.isFinite ? start : Date().timeIntervalSince(startedAt)

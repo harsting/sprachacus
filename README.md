@@ -161,6 +161,10 @@ Sie wirkt an drei Stellen:
 - Die Spracherkennung bekommt die Liste als Kontext mit (`AnalysisContext.contextualStrings`) und
   bevorzugt diese Schreibweisen. Das ist eine Gewichtung, keine Garantie — bei deutlich
   abweichender Aussprache hilft sie nicht.
+- **Die Schreibweise wird am Ende hart gesetzt.** Weder die Erkennung noch das Sprachmodell halten
+  sich zuverlässig daran: Aus „21Dx Tool" wurde im Betrieb „21DX Tool". Deshalb werden die Begriffe
+  im fertigen Text ersetzt — nur Groß- und Kleinschreibung, nur an Wortgrenzen, längere Begriffe
+  zuerst. Das gilt für Diktat, Assist und Meeting-Transkripte.
 - Die KI-Korrektur beim Diktat bekommt die Liste als feste Regel: Sie darf diese Begriffe nicht
   „verbessern" und setzt erkennbar verhörte Fassungen zurück (getestet: „Rento Kiel" → „Rentokil").
 - Die Meeting-Zusammenfassung schreibt sie richtig, auch wenn im Transkript eine verhörte Fassung
@@ -221,9 +225,15 @@ Drei Hebel:
   Korrektur läuft aber weiter und wird im Verlauf nachgetragen. Während der Korrektur zählt das
   Overlay ab drei Sekunden die Wartezeit mit.
 
-Dazu optional unter Einstellungen → Tempo: **kurze, saubere Diktate ohne KI-Korrektur einfügen**.
-Apples Erkennung setzt Satzzeichen und Großschreibung bereits selbst; bei kurzen Sätzen ohne
-Füllwörter liefert das Modell meist denselben Text zurück und kostet nur Zeit.
+**Ganz kurze Äußerungen gehen immer ohne KI durch** — bis sechs Wörter und 40 Zeichen, sofern kein
+Füllwort vorkommt. Gemessen gibt das Modell dort meist exakt denselben Text zurück und kostet nur
+Zeit: „Ja" 578 ms, „Danke" 359 ms, „Passt" 411 ms, „Moment bitte" 409 ms — jeweils unverändert
+zurück. Es glättet dort allenfalls Satzzeichen („Nein danke" → „Nein, danke."); das ist der Preis.
+Enthält die Äußerung ein Füllwort („ähm ja"), läuft die Korrektur wie gehabt — sie macht daraus
+zuverlässig „Ja".
+
+Darüber hinaus optional unter Einstellungen → Tempo: **kurze, saubere Diktate ohne KI-Korrektur
+einfügen** (bis 150 Zeichen).
 
 ## Einfügen und Zwischenablage
 

@@ -132,6 +132,20 @@ struct RefinerChain {
     ///   die Korrektur soll trotzdem nicht verloren gehen.
     func refine(_ raw: String, languageCode: String,
                 onLateResult: ((String, String) -> Void)? = nil) async -> (text: String, refinerName: String) {
+        let (text, name) = await decide(raw, languageCode: languageCode, onLateResult: onLateResult)
+        // Zum Schluss die hinterlegten Schreibweisen durchsetzen — weder die
+        // Erkennung noch das Sprachmodell halten sich zuverlässig daran.
+        return (VocabularySpelling.apply(text, terms: Settings.shared.vocabularyTerms), name)
+    }
+
+    private func decide(_ raw: String, languageCode: String,
+                        onLateResult: ((String, String) -> Void)?) async -> (text: String, refinerName: String) {
+        // Sehr kurze Äußerungen gehen immer direkt durch. Bei „Ja", „Danke"
+        // oder „Moment bitte" gibt es nichts zu korrigieren — die Korrektur
+        // kostet dort nur Zeit.
+        if Self.isTrivial(raw) {
+            return (raw, "ohne Korrektur (sehr kurz)")
+        }
         if Settings.shared.skipRefinementForShortText, Self.looksClean(raw) {
             return (raw, "ohne Korrektur (kurz)")
         }
@@ -191,7 +205,8 @@ struct RefinerChain {
         if case .timedOut = outcome {
             Task {
                 if let late = await work.value, !late.isEmpty {
-                    onLateResult?(late, refiner.name)
+                    onLateResult?(VocabularySpelling.apply(late, terms: Settings.shared.vocabularyTerms),
+                                  refiner.name)
                 }
             }
         }
@@ -216,6 +231,31 @@ struct RefinerChain {
         }
     }
 
+    /// Ein paar Wörter ohne Füllwörter: „Ja", „Danke", „Dazu habe ich eine
+    /// Rückfrage". Da ist nichts zu glätten, zu interpunktieren oder zu
+    /// entfüllwörtern — das Modell gäbe denselben Text zurück.
+    static func isTrivial(_ raw: String) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text.count <= maximumTrivialLength else { return false }
+        let words = Self.words(in: text)
+        guard words.count <= maximumTrivialWords, !words.isEmpty else { return false }
+        return !words.contains { fillers.contains($0) }
+    }
+
+    /// Grenzen bewusst so gewählt, dass die typischen Einwort- und
+    /// Kurzantworten hineinfallen („Ja", „Danke", „Dazu habe ich eine
+    /// Rückfrage"), ein vollständiger Satz mit Inhalt aber nicht.
+    static let maximumTrivialLength = 40
+    static let maximumTrivialWords = 6
+
+    private static let fillers: Set<String> = ["äh", "ähm", "öh", "öhm", "hm", "hmm", "mhm", "ehm", "em"]
+
+    private static func words(in text: String) -> [String] {
+        text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+    }
+
     /// Kurz, mit Satzzeichen und ohne Füllwörter — dann ändert die Korrektur
     /// erfahrungsgemäß nichts mehr.
     static func looksClean(_ raw: String) -> Bool {
@@ -223,11 +263,7 @@ struct RefinerChain {
         guard text.count <= Settings.shortTextLimit,
               let first = text.first, first.isUppercase,
               let last = text.last, ".!?".contains(last) else { return false }
-        let fillers: Set<String> = ["äh", "ähm", "öh", "öhm", "hm", "hmm", "mhm", "ehm", "em"]
-        let words = text.lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
-        return !words.contains { fillers.contains($0) }
+        return !Self.words(in: text).contains { fillers.contains($0) }
     }
 
     /// Wie lange auf die Korrektur gewartet wird, bevor der Rohtext eingefügt

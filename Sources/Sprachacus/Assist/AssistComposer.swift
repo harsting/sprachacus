@@ -64,7 +64,9 @@ enum AssistComposer {
             do {
                 let cleaned = AssistPrompts.cleanOutput(try await provider.run())
                 if !cleaned.isEmpty {
-                    return Output(text: cleaned, providerName: provider.name)
+                    // Eigene Begriffe in der vom Nutzer hinterlegten Schreibweise.
+                    let spelled = VocabularySpelling.apply(cleaned, terms: Settings.shared.vocabularyTerms)
+                    return Output(text: spelled, providerName: provider.name)
                 }
                 errors.append("\(provider.name): leere Antwort")
             } catch {

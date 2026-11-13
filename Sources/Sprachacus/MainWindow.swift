@@ -341,7 +341,7 @@ struct SettingsTab: View {
             } header: {
                 Text("Eigene Begriffe")
             } footer: {
-                Text("Firmennamen, Kürzel, Produkt- und Standnummern — **eine pro Zeile, Komma oder Semikolon gehen auch**. Genau solche Wörter überhört die Spracherkennung am ehesten, weil sie in keinem Wörterbuch stehen. Was hier steht, wird bevorzugt erkannt und von der KI-Korrektur nicht mehr „verbessert“. Die Zeile darunter zeigt, was Sprachacus daraus gelesen hat.")
+                Text("Firmennamen, Kürzel, Produkt- und Standnummern — **eine pro Zeile, Komma oder Semikolon gehen auch**. Genau solche Wörter überhört die Spracherkennung am ehesten, weil sie in keinem Wörterbuch stehen. Was hier steht, wird bevorzugt erkannt, von der KI-Korrektur nicht mehr „verbessert“ — und **genau so geschrieben, wie du es hier einträgst**: Aus „21DX Tool“ wird wieder „21Dx Tool“. Die Zeile darunter zeigt, was Sprachacus daraus gelesen hat.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -461,7 +461,7 @@ struct SettingsTab: View {
             } header: {
                 Text("Tempo")
             } footer: {
-                Text("Spart bei kurzen Sätzen rund eine halbe Sekunde: Apples Erkennung setzt Satzzeichen und Großschreibung schon selbst, und bei kurzen Sätzen ohne Füllwörter gibt die KI meist denselben Text zurück. Greift nur bis \(Settings.shortTextLimit) Zeichen und nur, wenn der Satz sauber aussieht — alles andere wird weiterhin korrigiert.")
+                Text("Ganz kurze Äußerungen (‚Ja‘, ‚Danke‘, ‚Dazu habe ich eine Rückfrage‘) gehen **immer** ohne KI durch — gemessen gibt sie dort meist denselben Text zurück und kostet 0,4 bis 1,2 Sekunden. Dieser Schalter erweitert das auf alle sauberen Sätze bis \(Settings.shortTextLimit) Zeichen. Füllwörter (‚ähm ja‘) schließen beides aus, da korrigiert die KI weiter.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -79,6 +79,17 @@ enum SpeedTest {
                        dauer < limit ? "eingehalten" : "GERISSEN", Double(out.count) / dauer))
         }
 
+        // 4b. Was die Korrektur mit sehr kurzen Äußerungen macht — lohnt sie
+        //     sich dort überhaupt?
+        for probe in ["Ja", "Ja.", "Danke", "Nein danke", "Passt", "Dazu habe ich eine Rückfrage",
+                      "ähm ja", "Moment bitte"] {
+            FoundationModelsRefiner.prewarm(languageCode: locale.identifier)
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            let start = Date()
+            let (out, name) = await RefinerChain.current().refine(probe, languageCode: locale.identifier)
+            log("4b. [\(probe)] -> [\(out)] ueber \(name):   \(ms(start))")
+        }
+
         // 5. Dieselbe Korrektur mit vorgewärmter Sitzung.
         if case .available = SystemLanguageModel.default.availability {
             let session = LanguageModelSession(

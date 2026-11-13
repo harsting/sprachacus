@@ -88,8 +88,13 @@ make setup
 installiert sie nach `/Applications` und startet sie. Der Befehl ist gefahrlos mehrfach
 ausführbar und ändert nichts an bereits erteilten Berechtigungen.
 
-Danach nur noch zwei Freigaben erteilen (die App fragt beim ersten Start von selbst):
-**Bedienungshilfen** für den Hotkey und das Einfügen, sowie das **Mikrofon**.
+Beim ersten Start öffnet sich das **Einrichtungsfenster**: eine Liste, die live zeigt, was schon
+steht und was fehlt — Bedienungshilfen, Mikrofon, Sprachmodell, Mikrofon-Auswahl, KI-Korrektur —
+mit je einem Knopf, der die passende Stelle öffnet. Es schließt sich nicht selbst und kommt über
+das Mikrofon-Symbol → „Einrichtung…" jederzeit zurück.
+
+Pflicht sind nur die ersten beiden Punkte: **Bedienungshilfen** für den Hotkey und das Einfügen
+sowie das **Mikrofon**.
 
 Weitere Befehle:
 
@@ -104,9 +109,13 @@ Wichtig: Die App immer als `.app` starten (macht das Makefile), nie das rohe Bin
 
 ## Einmalige Einrichtung (beim ersten Start)
 
+Das Einrichtungsfenster führt durch die folgenden Punkte und prüft sie im Sekundentakt nach — man
+sieht also sofort, wenn eine Freigabe greift.
+
 1. **Bedienungshilfen**: Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen → „Sprachacus" aktivieren. (Nötig für den globalen Hotkey und das automatische Einfügen. Die App erkennt die Freigabe automatisch, kein Neustart nötig.)
 2. **Mikrofon**: Dialog mit „Erlauben" bestätigen.
-3. Optional: **Apple Intelligence** in den Systemeinstellungen aktivieren — dann läuft die Textoptimierung komplett lokal und am schnellsten. Ohne Apple Intelligence nutzt die App automatisch die Claude CLI (Haiku).
+3. **Sprachmodell** vorab laden — sonst lädt macOS es mitten im ersten Diktat.
+4. Optional: **Apple Intelligence** in den Systemeinstellungen aktivieren — dann läuft die Textoptimierung komplett lokal und am schnellsten. Ohne Apple Intelligence nutzt die App automatisch die Claude CLI (Haiku).
 
 Das deutsche Sprachmodell lädt macOS bei Bedarf einmalig herunter (Fortschritt im Overlay).
 

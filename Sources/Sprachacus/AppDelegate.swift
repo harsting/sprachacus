@@ -23,6 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupStatusItem()
         setupMainMenu()
 
+        // Beim allerersten Start zeigen, was noch fehlt — sonst sieht man nur
+        // ein Mikrofon-Symbol und nichts passiert.
+        if !Settings.shared.setupSeen {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                SetupWindowController.shared.show()
+            }
+        }
+
         dictation.onStateChange = { [weak self] state in
             self?.updateIcon(for: state)
         }
@@ -251,6 +259,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(showItem)
         }
 
+        let setupItem = NSMenuItem(title: "Einrichtung…", action: #selector(openSetupWindow), keyEquivalent: "")
+        setupItem.target = self
+        menu.addItem(setupItem)
+
         let windowItem = NSMenuItem(title: "Verlauf & Einstellungen…", action: #selector(openMainWindow), keyEquivalent: "")
         windowItem.target = self
         menu.addItem(windowItem)
@@ -347,6 +359,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             alert.informativeText = "\(error.localizedDescription)\n\nTipp: Das klappt am zuverlässigsten, wenn die App in /Applications liegt (make install)."
             alert.runModal()
         }
+    }
+
+    @objc private func openSetupWindow() {
+        SetupWindowController.shared.show()
     }
 
     @objc private func openMainWindow() {

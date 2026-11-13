@@ -15,6 +15,10 @@ final class MainWindowController: NSObject, NSWindowDelegate, ObservableObject {
     @Published var selectedTab: MainTab = .history
     private var window: NSWindow?
 
+    /// Ob das Fenster gerade sichtbar ist — das Einrichtungsfenster muss die
+    /// Dock-Anzeige sonst wegschalten, während hier noch etwas offen ist.
+    var isOpen: Bool { window?.isVisible ?? false }
+
     func show(tab: MainTab? = nil) {
         if let tab { selectedTab = tab }
         if window == nil {

@@ -49,6 +49,13 @@ final class Settings {
     /// Bis zu dieser Länge gilt ein Diktat als „kurz".
     static let shortTextLimit = 150
 
+    /// Wurde das Einrichtungsfenster schon einmal gezeigt? Es kommt beim
+    /// ersten Start von selbst und danach nur noch auf Wunsch.
+    var setupSeen: Bool {
+        get { defaults.bool(forKey: "setupSeen") }
+        set { defaults.set(newValue, forKey: "setupSeen") }
+    }
+
     /// Autostart bei Anmeldung — standardmäßig an.
     var launchAtLogin: Bool {
         get { defaults.object(forKey: "launchAtLogin") as? Bool ?? true }

@@ -70,12 +70,16 @@ final class FoundationModelsRefiner: TextRefiner {
             return try await session.respond(to: message, options: options).content
         } catch {
             // Apples Modell verweigert gelegentlich die Antwort
-            // („Response may contain sensitive or unsafe content") — gemessen
-            // an einem völlig harmlosen Satz über Schichtplanung, und beim
-            // zweiten Versuch war es weg. Ohne Wiederholung landet dann der
-            // unkorrigierte Rohtext im Dokument.
-            NSLog("Apple Intelligence: erster Versuch fehlgeschlagen (\(error)) — einmal wiederholen")
-            let retry = LanguageModelSession(instructions: instructions)
+            // („Response may contain sensitive or unsafe content"). Die Sperre
+            // reagiert dabei auch auf die Anweisung selbst, nicht nur auf den
+            // Text: Ein harmloser Satz über Schichtplanung wurde mit dem
+            // ausführlichen Prompt zweimal von zwei verweigert und mit dem
+            // knappen zweimal von zwei beantwortet. Ohne diese Wiederholung
+            // landet der unkorrigierte Rohtext im Dokument.
+            NSLog("Apple Intelligence: erster Versuch fehlgeschlagen (\(error)) — knappe Anweisung versuchen")
+            let kurz = RefinerPrompts.minimalInstructions(languageCode: languageCode)
+                + "\n\n" + RefinerPrompts.guardRules(languageCode: languageCode)
+            let retry = LanguageModelSession(instructions: kurz)
             return try await retry.respond(to: message, options: options).content
         }
     }

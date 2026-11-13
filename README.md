@@ -165,6 +165,11 @@ Sie wirkt an drei Stellen:
   sich zuverlässig daran: Aus „21Dx Tool" wurde im Betrieb „21DX Tool". Deshalb werden die Begriffe
   im fertigen Text ersetzt — nur Groß- und Kleinschreibung, nur an Wortgrenzen, längere Begriffe
   zuerst. Das gilt für Diktat, Assist und Meeting-Transkripte.
+- **Knappe Verhörer werden mitkorrigiert.** Das Modell schrieb „Doctevo" statt „doctevio" — ein
+  fehlender Buchstabe, da hilft Groß-/Kleinschreibung nicht. Begriffe ab sechs Zeichen werden
+  deshalb auch bei einem Zeichen Abstand ersetzt, aber nie dort, wo das gefundene Wort mit dem
+  Begriff anfängt: „Rentokils" bleibt der Genitiv von „Rentokil" und wird nicht zurückgekürzt.
+  Gegengeprüft, dass „Mobiliar", „Direktor" und „Doktorin" unberührt bleiben.
 - Die KI-Korrektur beim Diktat bekommt die Liste als feste Regel: Sie darf diese Begriffe nicht
   „verbessern" und setzt erkennbar verhörte Fassungen zurück (getestet: „Rento Kiel" → „Rentokil").
 - Die Meeting-Zusammenfassung schreibt sie richtig, auch wenn im Transkript eine verhörte Fassung
@@ -258,8 +263,14 @@ gespeichert hat, bekommt Verbesserungen am Standard nicht automatisch. Dort steh
 Standard zurücksetzen" bereit.
 
 **Verweigert das Modell die Antwort** („Response may contain sensitive or unsafe content" — gemessen
-an einem harmlosen Satz über Schichtplanung), wird einmal mit frischer Sitzung wiederholt, bevor
-der Rohtext eingefügt wird.
+an einem harmlosen Satz über Schichtplanung), wird einmal mit einer **knappen** Anweisung
+wiederholt. Die Inhaltssperre reagiert nämlich auch auf die Anweisung selbst: Derselbe Satz wurde
+mit dem ausführlichen Prompt verweigert und mit dem knappen beantwortet. Erst wenn auch das
+scheitert, wird der Rohtext eingefügt.
+
+**Der eigene Name** aus den Einstellungen wandert automatisch in die Anweisung („Der Sprecher heißt
+… ; schreibe seinen Namen korrekt"). Dafür braucht es keinen eigenen Prompt mehr — und wer keinen
+hat, bekommt künftige Verbesserungen am Standard automatisch mit.
 
 Vergleichen lässt sich das selbst:
 

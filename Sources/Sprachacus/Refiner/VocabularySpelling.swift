@@ -14,8 +14,64 @@ enum VocabularySpelling {
         var result = text
         for term in terms.sorted(by: { $0.count > $1.count }) where term.count >= 2 {
             result = replace(term, in: result)
+            result = replaceNearMisses(term, in: result)
         }
         return result
+    }
+
+    /// Fängt zusätzlich knappe Verhörer ab: Das Modell schrieb „Doctevo"
+    /// statt „doctevio" — ein Buchstabe fehlt, die reine Groß-/Kleinschreibung
+    /// greift da nicht.
+    ///
+    /// Bewusst eng gefasst: nur Begriffe ab sechs Zeichen, nur ein Fehler
+    /// Abstand, und niemals dort, wo das gefundene Wort mit dem Begriff
+    /// anfängt — „Rentokils" ist der Genitiv von „Rentokil" und darf nicht
+    /// zurückgekürzt werden.
+    private static func replaceNearMisses(_ term: String, in text: String) -> String {
+        guard term.count >= 6, !term.contains(" ") else { return text }
+        let lowerTerm = term.lowercased()
+        var result = ""
+        var wort = ""
+        func spuele() {
+            if !wort.isEmpty {
+                let lower = wort.lowercased()
+                if lower != lowerTerm,
+                   abs(wort.count - term.count) <= 1,
+                   !lower.hasPrefix(lowerTerm),
+                   editDistance(lower, lowerTerm) == 1 {
+                    result += term
+                } else {
+                    result += wort
+                }
+                wort = ""
+            }
+        }
+        for zeichen in text {
+            if zeichen.isLetter || zeichen.isNumber {
+                wort.append(zeichen)
+            } else {
+                spuele()
+                result.append(zeichen)
+            }
+        }
+        spuele()
+        return result
+    }
+
+    /// Levenshtein-Abstand, abgebrochen sobald er über eins liegt.
+    private static func editDistance(_ a: String, _ b: String) -> Int {
+        let x = Array(a), y = Array(b)
+        var vorherige = Array(0...y.count)
+        for i in 1...max(x.count, 1) where !x.isEmpty {
+            var aktuelle = [i] + Array(repeating: 0, count: y.count)
+            for j in 1...max(y.count, 1) where !y.isEmpty {
+                aktuelle[j] = x[i-1] == y[j-1]
+                    ? vorherige[j-1]
+                    : 1 + min(vorherige[j-1], vorherige[j], aktuelle[j-1])
+            }
+            vorherige = aktuelle
+        }
+        return vorherige[y.count]
     }
 
     private static func replace(_ term: String, in text: String) -> String {

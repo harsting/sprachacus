@@ -31,8 +31,8 @@ enum PromptTest {
 
         let varianten: [(String, String)] = [
             ("bisher", RefinerPrompts.defaultInstructions(languageCode: "de-DE")),
-            ("trennend", Self.kandidat),
-            ("sparsam", Self.sparsam),
+            ("wirksam", RefinerPrompts.instructions(languageCode: "de-DE")),
+            ("minimal", RefinerPrompts.minimalInstructions(languageCode: "de-DE")),
         ]
         for (nummer, text) in proben.enumerated() {
             log("===== Probe \(nummer + 1) (\(text.count) Zeichen) =====")

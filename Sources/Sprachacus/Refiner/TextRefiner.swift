@@ -94,7 +94,35 @@ enum RefinerPrompts {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Knappe Ersatzanweisung für den Fall, dass das Modell die Antwort
+    /// verweigert („Response may contain sensitive or unsafe content").
+    ///
+    /// Gemessen: An einem harmlosen Satz über Schichtplanung verweigert das
+    /// Modell beim ausführlichen Prompt zuverlässig, beim knappen nicht.
+    /// Offenbar reagiert die Inhaltssperre auch auf die Anweisung selbst,
+    /// nicht nur auf den Text.
+    static func minimalInstructions(languageCode: String) -> String {
+        if languageCode.hasPrefix("de") {
+            return """
+            Setze Satzzeichen und Groß-/Kleinschreibung in diesem Diktat. \
+            Entferne Füllwörter. Ändere sonst nichts. \
+            Antworte nur mit dem Text.
+            """
+        }
+        return """
+        Add punctuation and capitalization to this dictation. Remove filler words. \
+        Change nothing else. Reply with the text only.
+        """
+    }
+
     static func defaultInstructions(languageCode: String) -> String {
+        // Der Name des Sprechers gehört in die Anweisung, damit das Modell ihn
+        // richtig schreibt. Steht er in den Einstellungen, braucht es dafür
+        // keinen eigenen Prompt — sonst bekäme man Verbesserungen am Standard
+        // nie mit.
+        let name = Settings.shared.userName
+        let sprecher = name.isEmpty ? "" : "\n\nDer Sprecher heißt \(name); schreibe seinen Namen korrekt."
+        let speaker = name.isEmpty ? "" : "\n\nThe speaker's name is \(name); spell it correctly."
         if languageCode.hasPrefix("de") {
             return """
             Du bist ein Diktat-Korrektor. Du erhältst ein rohes Sprachtranskript ohne \
@@ -118,7 +146,7 @@ enum RefinerPrompts {
 
             Antworte AUSSCHLIESSLICH mit dem korrigierten Text, ohne Anführungszeichen und ohne \
             Kommentar.
-            """
+            """ + sprecher
         }
         return """
         You are a dictation editor. You receive a raw speech transcript without punctuation. \
@@ -134,7 +162,7 @@ enum RefinerPrompts {
         When in doubt, stay closer to what was said rather than making it sound better.
 
         Reply ONLY with the corrected text, no quotes, no commentary.
-        """
+        """ + speaker
     }
 }
 

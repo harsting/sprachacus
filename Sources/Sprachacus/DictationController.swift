@@ -158,8 +158,29 @@ final class DictationController {
         }
     }
 
+    /// Schreibt mit, wie lange die Schritte gedauert haben — ohne jeden
+    /// Wortlaut, nur Längen und Zeiten. Ohne das lässt sich hinterher nicht
+    /// sagen, woran eine lange Wartezeit lag.
+    private static func logTiming(characters: Int, refinerName: String,
+                                  stopped: Date, transcribed: Date, refined: Date) {
+        let abschluss = transcribed.timeIntervalSince(stopped)
+        let korrektur = refined.timeIntervalSince(transcribed)
+        let gesamt = Date().timeIntervalSince(stopped)
+        let line = String(format: "[%@] %d Zeichen · Abschluss %.2f s · Korrektur %.2f s (%@) · gesamt %.2f s\n",
+                          ISO8601DateFormatter().string(from: stopped),
+                          characters, abschluss, korrektur, refinerName, gesamt)
+        let url = AppPaths.supportDir.appendingPathComponent("diktat.log")
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile(); handle.write(Data(line.utf8)); try? handle.close()
+        } else {
+            try? Data(line.utf8).write(to: url)
+        }
+        NSLog("Diktat-Tempo: \(line.trimmingCharacters(in: .newlines))")
+    }
+
     private func stopAndProcess() {
         let mode = self.mode
+        let stoppedAt = Date()
         state = .processing
         overlay.show(phase: .processing("Transkribiere…"))
         recorder.stop()
@@ -183,6 +204,7 @@ final class DictationController {
             defer { watchdog.cancel() }
             do {
                 let raw = try await transcriber.finish()
+                let transcribedAt = Date()
                 // Nach jedem längeren Schritt prüfen, ob der Nutzer abgebrochen
                 // hat — sonst würde noch eingefügt, was er verworfen hat.
                 guard !Task.isCancelled, self.state == .processing else { return }
@@ -224,6 +246,7 @@ final class DictationController {
                             }
                         })
                     ticker.cancel()
+                    let refinedAt = Date()
                     guard !Task.isCancelled, self.state == .processing else { return }
                     NSLog("Refined via \(refinerName): \(refined.prefix(80))")
                     HistoryStore.shared.complete(refined, refinerName: refinerName, to: entry.id)
@@ -232,6 +255,8 @@ final class DictationController {
                     }
                     self.paster.paste(refined)
                     self.overlay.flash(.success)
+                    Self.logTiming(characters: raw.count, refinerName: refinerName,
+                                   stopped: stoppedAt, transcribed: transcribedAt, refined: refinedAt)
                 case .assist(let context):
                     guard !Task.isCancelled, self.state == .processing else { return }
                     // The panel takes over from here — it shows its own progress.

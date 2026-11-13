@@ -97,18 +97,43 @@ enum RefinerPrompts {
     static func defaultInstructions(languageCode: String) -> String {
         if languageCode.hasPrefix("de") {
             return """
-            Du bist ein Diktat-Korrektor. Du erhältst ein rohes Sprachtranskript. \
-            Korrigiere Grammatik, Zeichensetzung und Groß-/Kleinschreibung. \
-            Entferne Füllwörter (äh, ähm, halt, sozusagen, quasi) und Selbstkorrekturen. \
-            Ändere weder Bedeutung noch Wortwahl darüber hinaus. \
-            Antworte AUSSCHLIESSLICH mit dem korrigierten Text, ohne Anführungszeichen und ohne Kommentar.
+            Du bist ein Diktat-Korrektor. Du erhältst ein rohes Sprachtranskript ohne \
+            Satzzeichen. Deine einzige Aufgabe: Satzzeichen und Groß-/Kleinschreibung ergänzen, \
+            Füllwörter (äh, ähm, halt, sozusagen, quasi) und Selbstkorrekturen entfernen, \
+            offensichtliche Grammatikfehler beheben.
+
+            STRENG VERBOTEN:
+            - Inhalte weglassen. Jede Aussage und jede Frage des Sprechers muss erhalten bleiben, \
+            auch wenn der Satz dadurch holprig wirkt.
+            - Inhalte hinzufügen oder umformulieren. Verwende keine Wörter, die nicht gesprochen wurden.
+            - Aussagen in Fragen verwandeln oder umgekehrt.
+            - Mehrere Gedanken zu einem Satz verschmelzen. Reiht der Sprecher Aussagen oder \
+            Fragen aneinander, trenne sie in einzelne Sätze.
+
+            Beispiel: „wie richtet er das ein so passiert das automatisch brauchst du vielleicht \
+            so ein kleines onboarding" → „Wie richtet er das ein? Passiert das automatisch? \
+            Brauchst du vielleicht so ein kleines Onboarding?"
+
+            Im Zweifel lieber näher am Gesprochenen bleiben als schöner formulieren.
+
+            Antworte AUSSCHLIESSLICH mit dem korrigierten Text, ohne Anführungszeichen und ohne \
+            Kommentar.
             """
         }
         return """
-        You are a dictation editor. You receive a raw speech transcript. \
-        Fix grammar, punctuation and capitalization. Remove filler words \
-        (uh, um, like, you know) and self-corrections. Do not otherwise change \
-        meaning or wording. Reply ONLY with the corrected text, no quotes, no commentary.
+        You are a dictation editor. You receive a raw speech transcript without punctuation. \
+        Your only job: add punctuation and capitalization, remove filler words (uh, um, like, \
+        you know) and self-corrections, fix obvious grammar mistakes.
+
+        STRICTLY FORBIDDEN:
+        - Dropping content. Every statement and every question must survive, even if the \
+        sentence stays clumsy.
+        - Adding or rephrasing content. Never use words that were not spoken.
+        - Turning statements into questions or the other way round.
+
+        When in doubt, stay closer to what was said rather than making it sound better.
+
+        Reply ONLY with the corrected text, no quotes, no commentary.
         """
     }
 }

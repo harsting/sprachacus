@@ -236,6 +236,40 @@ zuverlässig „Ja".
 Darüber hinaus optional unter Einstellungen → Tempo: **kurze, saubere Diktate ohne KI-Korrektur
 einfügen** (bis 150 Zeichen).
 
+## Warum die Korrektur so streng angewiesen wird
+
+Das lokale Modell neigt dazu, holprig Gesprochenes „schöner" zu machen — und dabei Inhalt zu
+verlieren. Im Betrieb aufgetreten: Aus „Wie richtet er das ein so passiert das automatisch brauchst
+du vielleicht so ein kleines Onboarding" wurde „Wie richtet er das ein, so dass automatisch ein
+kleines Onboarding erforderlich ist?" — drei Fragen zu einer verschmolzen, eine davon ersatzlos
+gestrichen, „erforderlich ist" dazuerfunden. Reproduzierbar in fünf von fünf Durchläufen.
+
+Der Standard-Prompt verbietet deshalb ausdrücklich das Weglassen, Hinzufügen und Verschmelzen und
+verlangt, aneinandergereihte Gedanken in einzelne Sätze zu trennen. Gegengeprüft an Diktaten aus
+dem Alltag: Der Fehler verschwindet vollständig; dafür setzt das Modell gelegentlich einen Punkt zu
+viel in einen verschachtelten Satz. Inhalt zu verlieren wiegt schwerer als ein Punkt zu viel.
+
+Eine dritte, zurückhaltendere Fassung („bleib näher am Gesprochenen", ohne Trennregel) war
+schlechter als beide: Sie behob den Fehler nicht und löste an einem harmlosen Satz über
+Schichtplanung zweimal die Inhaltssperre des Modells aus.
+
+**Eigener Prompt sticht Standard:** Wer unter Einstellungen eine eigene Korrektur-Anweisung
+gespeichert hat, bekommt Verbesserungen am Standard nicht automatisch. Dort steht dann „Auf
+Standard zurücksetzen" bereit.
+
+**Verweigert das Modell die Antwort** („Response may contain sensitive or unsafe content" — gemessen
+an einem harmlosen Satz über Schichtplanung), wird einmal mit frischer Sitzung wiederholt, bevor
+der Rohtext eingefügt wird.
+
+Vergleichen lässt sich das selbst:
+
+```bash
+defaults write com.marvinharst.sprachacus promptTestFile -string /pfad/proben.txt
+```
+
+Mehrere Proben in einer Datei, getrennt durch eine Zeile mit `---`; das Ergebnis landet in
+`prompt.log`.
+
 ## Einfügen und Zwischenablage
 
 Sprachacus legt den fertigen Text in die Zwischenablage, drückt ⌘V für dich und stellt danach

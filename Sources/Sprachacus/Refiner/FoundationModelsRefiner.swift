@@ -64,10 +64,19 @@ final class FoundationModelsRefiner: TextRefiner {
             // Gleich für das nächste Diktat wieder anwärmen.
             Task.detached { Self.prewarm(languageCode: languageCode) }
         }
-        let response = try await session.respond(
-            to: RefinerPrompts.userMessage(raw, languageCode: languageCode),
-            options: GenerationOptions(temperature: 0.1)
-        )
-        return response.content
+        let message = RefinerPrompts.userMessage(raw, languageCode: languageCode)
+        let options = GenerationOptions(temperature: 0.1)
+        do {
+            return try await session.respond(to: message, options: options).content
+        } catch {
+            // Apples Modell verweigert gelegentlich die Antwort
+            // („Response may contain sensitive or unsafe content") — gemessen
+            // an einem völlig harmlosen Satz über Schichtplanung, und beim
+            // zweiten Versuch war es weg. Ohne Wiederholung landet dann der
+            // unkorrigierte Rohtext im Dokument.
+            NSLog("Apple Intelligence: erster Versuch fehlgeschlagen (\(error)) — einmal wiederholen")
+            let retry = LanguageModelSession(instructions: instructions)
+            return try await retry.respond(to: message, options: options).content
+        }
     }
 }

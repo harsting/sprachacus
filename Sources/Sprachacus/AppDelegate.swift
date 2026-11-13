@@ -72,6 +72,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let path = UserDefaults.standard.string(forKey: "diarizerTestFile") {
             Task { await DiarizerSelfTest.run(path: path) }
         }
+        if let file = UserDefaults.standard.string(forKey: "promptTestFile") {
+            Task { await PromptTest.run(file: file) }
+        }
         if let file = UserDefaults.standard.string(forKey: "speedTestFile") {
             Task { await SpeedTest.run(file: file) }
         }

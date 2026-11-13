@@ -271,16 +271,16 @@ struct RefinerChain {
     /// Wie lange auf die Korrektur gewartet wird, bevor der Rohtext eingefügt
     /// wird.
     ///
-    /// Zwei verschiedene Erwartungen: Bei einem kurzen Satz soll es sofort
-    /// gehen — da ist ein kaltes Modell (gemessen 6–15 s) unzumutbar. Bei
-    /// einem langen Diktat rechnet man ohnehin mit ein paar Sekunden, und ein
-    /// abgeschnittener Durchlauf wäre viel ärgerlicher als das Warten.
-    /// Gemessene Zeiten bei warmem Modell: 580 Zeichen 5,9 s, 1030 Zeichen
-    /// 4,3 s, 2040 Zeichen 5,1 s. Das Limit liegt überall mindestens beim
-    /// Dreifachen.
+    /// Die Grundzeit war anfangs zu knapp: Ein Satz mit 57 Zeichen lief im
+    /// Alltag in das Limit von 2,6 s und wurde unkorrigiert eingefügt, weil
+    /// das Modell gerade kalt war. Unkorrigierter Text ist ärgerlicher als
+    /// ein paar Sekunden Wartezeit — zumal das Overlay dabei mitzählt und
+    /// sehr kurze Äußerungen ohnehin direkt durchgehen.
+    ///
+    /// Gemessene Zeiten bei warmem Modell: 0,7 s für einen Satz, 6,3 s für
+    /// 1030 Zeichen, 9,1 s für 2620. Das Limit liegt überall darüber:
+    /// 57 Zeichen → 5,7 s, 200 → 10 s, 1030 → 35 s, 2620 → 60 s.
     static func deadline(for raw: String) -> TimeInterval {
-        let count = Double(raw.count)
-        if raw.count <= 200 { return 1.5 + count * 0.02 }
-        return min(60, 6 + count * 0.03)
+        min(60, 4 + Double(raw.count) * 0.03)
     }
 }

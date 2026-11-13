@@ -226,7 +226,7 @@ final class DictationController {
                     ticker.cancel()
                     guard !Task.isCancelled, self.state == .processing else { return }
                     NSLog("Refined via \(refinerName): \(refined.prefix(80))")
-                    HistoryStore.shared.addLateRefinement(refined, refinerName: refinerName, to: entry.id)
+                    HistoryStore.shared.complete(refined, refinerName: refinerName, to: entry.id)
                     self.paster.onFailure = { [weak self] reason in
                         self?.overlay.flash(.error(reason), duration: 2.5)
                     }

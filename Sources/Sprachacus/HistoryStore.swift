@@ -76,12 +76,18 @@ final class HistoryStore: ObservableObject {
         return entry
     }
 
-    /// Trägt eine Korrektur nach, die erst nach dem Zeitlimit fertig wurde.
-    func addLateRefinement(_ text: String, refinerName: String, to id: UUID) {
+    /// Trägt das Ergebnis der Korrektur in den vorab angelegten Eintrag ein.
+    func complete(_ text: String, refinerName: String, to id: UUID) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         entries[index].refined = text
-        entries[index].refinerName = "\(refinerName) (nachgereicht)"
+        entries[index].refinerName = refinerName
         save()
+    }
+
+    /// Trägt eine Korrektur nach, die erst nach dem Zeitlimit fertig wurde —
+    /// eingefügt war zu dem Zeitpunkt schon der Rohtext.
+    func addLateRefinement(_ text: String, refinerName: String, to id: UUID) {
+        complete(text, refinerName: "\(refinerName) (nachgereicht)", to: id)
     }
 
     func update(_ entry: HistoryEntry) {

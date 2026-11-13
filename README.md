@@ -217,13 +217,14 @@ Drei Hebel:
 - **Das lokale Modell wird vorgewärmt** — beim App-Start, beim Beginn jeder Aufnahme und nach jeder
   Korrektur. Der Kaltstart kostet gemessen das Zehn- bis Zwanzigfache einer warmen Anfrage; diese
   Zeit vergeht jetzt im Hintergrund statt mit dem Cursor im Dokument.
-- **Zeitlimit für die Korrektur**, gestaffelt nach Länge: bis 200 Zeichen 1,5 s plus 20 ms je
-  Zeichen (ein kurzer Satz also rund 3 s), darüber 6 s plus 30 ms je Zeichen, höchstens 60 s. Ein
-  langes Diktat wird also nicht abgeschnitten — gemessen braucht die Korrektur bei warmem Modell
-  6,3 s für 1030 Zeichen, 8,6 s für 2070 und 9,1 s für 2620; das Limit liegt überall beim Vier- bis
-  Siebenfachen. Greift es doch, wird der Rohtext eingefügt („Rohtext (Zeitlimit)" im Verlauf), die
-  Korrektur läuft aber weiter und wird im Verlauf nachgetragen. Während der Korrektur zählt das
-  Overlay ab drei Sekunden die Wartezeit mit.
+- **Zeitlimit für die Korrektur**: 4 Sekunden plus 30 ms je Zeichen, höchstens 60 s — also 5,7 s
+  für einen kurzen Satz, 35 s für 1030 Zeichen, 60 s für alles ab 1870 Zeichen. Gemessen braucht
+  die Korrektur bei warmem Modell 0,7 s für einen Satz, 6,3 s für 1030 Zeichen und 9,1 s für 2620;
+  das Limit liegt überall deutlich darüber. Die Grundzeit war anfangs zu knapp (1,5 s): Ein Satz
+  mit 57 Zeichen lief im Alltag ins Limit, weil das Modell gerade kalt war, und wurde unkorrigiert
+  eingefügt. Greift das Limit doch, wird der Rohtext eingefügt („Rohtext (Zeitlimit)" im Verlauf),
+  die Korrektur läuft aber weiter und wird im Verlauf nachgetragen („… (nachgereicht)"). Während
+  der Korrektur zählt das Overlay ab drei Sekunden die Wartezeit mit.
 
 **Ganz kurze Äußerungen gehen immer ohne KI durch** — bis sechs Wörter und 40 Zeichen, sofern kein
 Füllwort vorkommt. Gemessen gibt das Modell dort meist exakt denselben Text zurück und kostet nur

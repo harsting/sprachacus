@@ -33,6 +33,8 @@ final class DictationController {
     private let recorder = AudioRecorder()
     private var transcriber = Transcriber()
     private let paster = Paster()
+    /// Fängt den Ton auf, bis die Erkennung bereit ist.
+    private let feed = BufferedAudioFeed()
     private var activity: NSObjectProtocol?
     /// Laufende Verarbeitung, damit sie sich abbrechen lässt.
     private var pipelineTask: Task<Void, Never>?
@@ -64,6 +66,7 @@ final class DictationController {
             return
         case .recording:
             recorder.stop()
+            feed.detach()
             transcriber.cancel()
             endActivity()
             overlay.hide()
@@ -98,6 +101,25 @@ final class DictationController {
         let locale = self.locale
         Task { @MainActor in
             do {
+                // Zuerst das Mikrofon — und zwar bevor irgendetwas anderes
+                // passiert. Das Öffnen der Erkennung dauert spürbar; vorher
+                // begann die Aufnahme erst danach und die ersten Worte
+                // fehlten. Der Ton wartet so lange im Puffer.
+                self.feed.detach()
+                try self.recorder.start(
+                    preferredUIDs: Settings.shared.inputDevicePriority,
+                    onBuffer: { [feed] buffer in feed.feed(buffer) },
+                    onLevel: { [weak self] level in
+                        Task { @MainActor in self?.overlay.model.pushLevel(level) }
+                    }
+                )
+                self.beginActivity()
+                self.overlay.show(phase: .recording)
+
+                // Die lokale KI-Korrektur schon einmal anwärmen — sie wird
+                // gleich gebraucht, und kalt kostet sie spürbar Zeit.
+                FoundationModelsRefiner.prewarm(languageCode: locale.identifier)
+
                 if !(await Transcriber.isModelInstalled(locale: locale)) {
                     overlay.show(phase: .downloading(0))
                     try await Transcriber.ensureModel(locale: locale) { [weak self] progress in
@@ -118,20 +140,16 @@ final class DictationController {
                 }
                 guard self.state == .recording else {
                     transcriber.cancel()
+                    self.recorder.stop()
+                    self.endActivity()
                     return
                 }
-                try self.recorder.start(
-                    preferredUIDs: Settings.shared.inputDevicePriority,
-                    onBuffer: { [weak transcriber] buffer in transcriber?.feed(buffer) },
-                    onLevel: { [weak self] level in
-                        Task { @MainActor in self?.overlay.model.pushLevel(level) }
-                    }
-                )
-                self.beginActivity()
-                self.overlay.show(phase: .recording)
+                // Alles, was seit dem Tastendruck gesprochen wurde, nachreichen.
+                self.feed.attach(transcriber)
             } catch {
                 NSLog("startRecording failed: \(error)")
                 self.recorder.stop()
+                self.feed.detach()
                 self.transcriber.cancel()
                 self.endActivity()
                 self.overlay.flash(.error(error.localizedDescription), duration: 2.0)
@@ -145,6 +163,7 @@ final class DictationController {
         state = .processing
         overlay.show(phase: .processing("Transkribiere…"))
         recorder.stop()
+        feed.detach()
         endActivity()
         let transcriber = self.transcriber
         let languageCode = Settings.shared.localeIdentifier

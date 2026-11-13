@@ -278,6 +278,7 @@ struct SettingsTab: View {
     @AppStorage("assistProvider") private var assistProviderRaw = AssistProviderChoice.auto.rawValue
     @AppStorage("userName") private var userName = ""
     @AppStorage("vocabulary") private var vocabulary = ""
+    @AppStorage("skipRefinementForShortText") private var skipShort = false
     @AppStorage("speakerDiarization") private var speakerDiarization = true
     @AppStorage("keepMeetingAudio") private var keepMeetingAudio = false
     @State private var inputDevices: [AudioDevices.Device] = []
@@ -451,6 +452,16 @@ struct SettingsTab: View {
                 Text("KI-Optimierung")
             } footer: {
                 Text("Sprachacus speichert selbst keine Zugangsdaten — es nutzt die Anmeldung der Claude CLI bzw. das lokale Apple-Modell.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Kurze, saubere Diktate sofort einfügen", isOn: $skipShort)
+            } header: {
+                Text("Tempo")
+            } footer: {
+                Text("Spart bei kurzen Sätzen rund eine halbe Sekunde: Apples Erkennung setzt Satzzeichen und Großschreibung schon selbst, und bei kurzen Sätzen ohne Füllwörter gibt die KI meist denselben Text zurück. Greift nur bis \(Settings.shortTextLimit) Zeichen und nur, wenn der Satz sauber aussieht — alles andere wird weiterhin korrigiert.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -128,16 +128,77 @@ struct RefinerChain {
     }
 
     func refine(_ raw: String, languageCode: String) async -> (text: String, refinerName: String) {
+        if Settings.shared.skipRefinementForShortText, Self.looksClean(raw) {
+            return (raw, "ohne Korrektur (kurz)")
+        }
         for refiner in refiners {
             guard await refiner.isAvailable() else { continue }
-            do {
-                let result = try await refiner.refine(raw, languageCode: languageCode)
-                let cleaned = RefinerPrompts.cleanOutput(result)
+            switch await Self.run(refiner, raw: raw, languageCode: languageCode) {
+            case .text(let cleaned):
                 if !cleaned.isEmpty { return (cleaned, refiner.name) }
-            } catch {
-                NSLog("Refiner \(refiner.name) failed: \(error.localizedDescription)")
+            case .failed:
+                continue
+            case .timedOut:
+                // Lieber sofort den Rohtext als minutenlang ein leeres Feld:
+                // Das lokale Modell braucht kalt ein Vielfaches (gemessen
+                // 15 s gegenüber 0,7 s vorgewärmt), und so lange wartet
+                // niemand mit dem Cursor im Dokument.
+                NSLog("Refiner \(refiner.name): Zeitlimit erreicht — Rohtext wird eingefügt")
+                return (raw, "Rohtext (Zeitlimit)")
             }
         }
         return (raw, "Rohtext")
+    }
+
+    private enum Outcome {
+        case text(String)
+        case failed
+        case timedOut
+    }
+
+    private static func run(_ refiner: TextRefiner, raw: String,
+                            languageCode: String) async -> Outcome {
+        let limit = deadline(for: raw)
+        return await withTaskGroup(of: Outcome.self) { group in
+            group.addTask {
+                do {
+                    let result = try await refiner.refine(raw, languageCode: languageCode)
+                    return .text(RefinerPrompts.cleanOutput(result))
+                } catch {
+                    NSLog("Refiner \(refiner.name) failed: \(error.localizedDescription)")
+                    return .failed
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(limit * 1_000_000_000))
+                return .timedOut
+            }
+            let first = await group.next() ?? .failed
+            group.cancelAll()
+            return first
+        }
+    }
+
+    /// Kurz, mit Satzzeichen und ohne Füllwörter — dann ändert die Korrektur
+    /// erfahrungsgemäß nichts mehr.
+    static func looksClean(_ raw: String) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count <= Settings.shortTextLimit,
+              let first = text.first, first.isUppercase,
+              let last = text.last, ".!?".contains(last) else { return false }
+        let fillers: Set<String> = ["äh", "ähm", "öh", "öhm", "hm", "hmm", "mhm", "ehm", "em"]
+        let words = text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        return !words.contains { fillers.contains($0) }
+    }
+
+    /// Wie lange auf die Korrektur gewartet wird, bevor der Rohtext eingefügt
+    /// wird. Längerer Text darf länger brauchen.
+    /// Warm braucht die Korrektur gemessen 0,7 s (kurz) bis 1,2 s (1250
+    /// Zeichen). Das Limit liegt deutlich darüber, aber so niedrig, dass ein
+    /// kaltes Modell nicht die ganze Wartezeit verursacht.
+    static func deadline(for raw: String) -> TimeInterval {
+        min(20, 1.5 + Double(raw.count) * 0.02)
     }
 }

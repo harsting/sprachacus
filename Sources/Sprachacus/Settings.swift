@@ -35,6 +35,20 @@ final class Settings {
         set { defaults.set(newValue, forKey: "claudePath") }
     }
 
+    /// Kurze, saubere Diktate ohne KI-Korrektur einfügen.
+    ///
+    /// Apples Erkennung liefert bereits Satzzeichen und Großschreibung; bei
+    /// kurzen Sätzen ohne Füllwörter gibt das Modell oft denselben Text
+    /// zurück — kostet aber gemessen rund 0,7 Sekunden. Standardmäßig aus,
+    /// weil es Qualität gegen Tempo tauscht.
+    var skipRefinementForShortText: Bool {
+        get { defaults.bool(forKey: "skipRefinementForShortText") }
+        set { defaults.set(newValue, forKey: "skipRefinementForShortText") }
+    }
+
+    /// Bis zu dieser Länge gilt ein Diktat als „kurz".
+    static let shortTextLimit = 150
+
     /// Autostart bei Anmeldung — standardmäßig an.
     var launchAtLogin: Bool {
         get { defaults.object(forKey: "launchAtLogin") as? Bool ?? true }

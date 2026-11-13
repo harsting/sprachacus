@@ -193,6 +193,32 @@ Sources/Sprachacus/
                                # Controller, Store (JSONL), Summarizer, UI
 ```
 
+## Tempo
+
+Gemessen in der App auf einem MacBook Air (M-Reihe, macOS 26), kurzes Diktat von 3,5 Sekunden:
+
+| Schritt | vorher | jetzt |
+| --- | --- | --- |
+| Erkennung öffnen (vor der Aufnahme) | 206–254 ms, in denen **nichts aufgenommen wurde** | 0 ms — das Mikrofon läuft sofort, der Ton wartet im Puffer |
+| Abschluss nach dem Stoppen | 355–650 ms | unverändert |
+| KI-Korrektur, Modell warm | 890–1000 ms | ~700 ms (vorgewärmte Sitzung) |
+| KI-Korrektur, Modell kalt | **6–15 Sekunden** | fällt beim App-Start an, nicht beim Diktat |
+
+Drei Hebel:
+
+- **Das Mikrofon startet zuerst.** Vorher wurde erst die Erkennung geöffnet und dann aufgenommen —
+  in dieser Viertelsekunde fehlten die ersten Worte, wenn man sofort lossprach. Jetzt läuft die
+  Aufnahme ab dem Tastendruck, und der Ton wird nachgereicht, sobald die Erkennung bereit ist.
+- **Das lokale Modell wird vorgewärmt** — beim App-Start, beim Beginn jeder Aufnahme und nach jeder
+  Korrektur. Der Kaltstart kostet gemessen das Zehn- bis Zwanzigfache einer warmen Anfrage; diese
+  Zeit vergeht jetzt im Hintergrund statt mit dem Cursor im Dokument.
+- **Zeitlimit für die Korrektur** (1,5 Sekunden plus 20 ms je Zeichen): Wird es überschritten, fügt
+  Sprachacus den Rohtext ein, statt weiter zu warten. Im Verlauf steht dann „Rohtext (Zeitlimit)".
+
+Dazu optional unter Einstellungen → Tempo: **kurze, saubere Diktate ohne KI-Korrektur einfügen**.
+Apples Erkennung setzt Satzzeichen und Großschreibung bereits selbst; bei kurzen Sätzen ohne
+Füllwörter liefert das Modell meist denselben Text zurück und kostet nur Zeit.
+
 ## Einfügen und Zwischenablage
 
 Sprachacus legt den fertigen Text in die Zwischenablage, drückt ⌘V für dich und stellt danach
@@ -281,6 +307,7 @@ defaults write com.marvinharst.sprachacus showOverlayDemo -bool YES        # Ove
 defaults write com.marvinharst.sprachacus diarizerTestFile -string /pfad.wav  # Sprechertrennung an einer Datei prüfen
 defaults write com.marvinharst.sprachacus runAudioSafetyTest -bool YES     # prüft, ob die Aufnahme die Wiedergabe stört
 defaults write com.marvinharst.sprachacus runMicDeviceTest -bool YES       # 30 s Mikrofon-Protokoll: Gerät, Pegel, Anteil Null-Abtastwerte
+defaults write com.marvinharst.sprachacus speedTestFile -string /pfad.wav  # misst, wo beim Diktat die Zeit hingeht → tempo.log
 ```
 
 Der Mikrofon-Test schreibt nach `~/Library/Application Support/Sprachacus/mic-device-test.log` und zeigt, ob überhaupt Ton ankommt (`davon ≠ 0`) und ob ein Gerätewechsel übernommen wird. Optional `micDeviceTestUID` für ein festes Gerät und `micDeviceTestSeconds` für die Dauer.

@@ -14,6 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Als Erstes: Steht die Oberfläche je wieder, soll es nachweisbar sein
         // und nicht in einem unbedienbaren Overlay enden.
         MainThreadWatchdog.shared.start()
+        // Das lokale Modell einmal anwärmen. Kalt kostet die erste Korrektur
+        // gemessen 15 Sekunden, vorgewärmt 0,7 — diese Zeit soll beim Start
+        // vergehen und nicht beim ersten Diktat.
+        if Settings.shared.refiner != .off && Settings.shared.refiner != .claudeCLI {
+            FoundationModelsRefiner.prewarm(languageCode: Settings.shared.localeIdentifier)
+        }
         setupStatusItem()
         setupMainMenu()
 
@@ -65,6 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if let path = UserDefaults.standard.string(forKey: "diarizerTestFile") {
             Task { await DiarizerSelfTest.run(path: path) }
+        }
+        if let file = UserDefaults.standard.string(forKey: "speedTestFile") {
+            Task { await SpeedTest.run(file: file) }
         }
         if UserDefaults.standard.bool(forKey: "runMicDeviceTest") {
             Task { await MicDeviceTest.run() }

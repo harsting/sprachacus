@@ -6,6 +6,46 @@ import FoundationModels
 final class FoundationModelsRefiner: TextRefiner {
     let name = "Apple Intelligence"
 
+    /// Vorgewärmte Sitzung für das nächste Diktat.
+    ///
+    /// Kalt kostet das Modell ein Vielfaches: gemessen 15,0 s beim ersten
+    /// Aufruf, danach 0,9 s, mit vorgewärmter Sitzung 0,66 s. Deshalb wird
+    /// beim Start der Aufnahme schon angewärmt — die Zeit vergeht dann
+    /// während des Sprechens statt danach.
+    private static let warmLock = NSLock()
+    private static var warmSession: LanguageModelSession?
+    /// Die Anweisungen, mit denen die vorgewärmte Sitzung gebaut wurde.
+    /// Ändert der Nutzer Sprache, Prompt oder eigene Begriffe, taugt sie nicht
+    /// mehr.
+    private static var warmInstructions: String?
+
+    static func prewarm(languageCode: String) {
+        guard case .available = SystemLanguageModel.default.availability else { return }
+        let instructions = RefinerPrompts.systemPrompt(languageCode: languageCode)
+        warmLock.lock()
+        let alreadyWarm = warmSession != nil && warmInstructions == instructions
+        warmLock.unlock()
+        guard !alreadyWarm else { return }
+
+        let session = LanguageModelSession(instructions: instructions)
+        session.prewarm()
+        warmLock.lock()
+        warmSession = session
+        warmInstructions = instructions
+        warmLock.unlock()
+    }
+
+    /// Nimmt die vorgewärmte Sitzung heraus — jedes Diktat bekommt eine
+    /// eigene, damit sich nichts aus dem vorherigen vermischt.
+    private static func takeWarmSession(instructions: String) -> LanguageModelSession? {
+        warmLock.lock()
+        defer { warmLock.unlock() }
+        guard warmInstructions == instructions, let session = warmSession else { return nil }
+        warmSession = nil
+        warmInstructions = nil
+        return session
+    }
+
     func isAvailable() async -> Bool {
         if case .available = SystemLanguageModel.default.availability { return true }
         return false
@@ -17,7 +57,13 @@ final class FoundationModelsRefiner: TextRefiner {
         guard raw.count < 8000 else {
             throw RefinerError(message: "Transkript zu lang für das lokale Modell")
         }
-        let session = LanguageModelSession(instructions: RefinerPrompts.systemPrompt(languageCode: languageCode))
+        let instructions = RefinerPrompts.systemPrompt(languageCode: languageCode)
+        let session = Self.takeWarmSession(instructions: instructions)
+            ?? LanguageModelSession(instructions: instructions)
+        defer {
+            // Gleich für das nächste Diktat wieder anwärmen.
+            Task.detached { Self.prewarm(languageCode: languageCode) }
+        }
         let response = try await session.respond(
             to: RefinerPrompts.userMessage(raw, languageCode: languageCode),
             options: GenerationOptions(temperature: 0.1)

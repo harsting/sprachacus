@@ -121,7 +121,7 @@ final class TranscriptionChannel: @unchecked Sendable {
             loudSecondsSinceResult += duration
         }
         let current = transcriber
-        if current == nil, let copy = Self.copy(buffer) {
+        if current == nil, let copy = BufferedAudioFeed.copy(buffer) {
             // Bewusst eine Kopie: Der Puffer aus dem Audio-Tap gehört dem
             // System und darf über den Rückruf hinaus nicht festgehalten werden.
             pending.append(copy)
@@ -227,27 +227,6 @@ final class TranscriptionChannel: @unchecked Sendable {
                 self.restart(reason: "erneuter Versuch")
             }
         }
-    }
-
-    private static func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
-        guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format,
-                                          frameCapacity: buffer.frameLength) else { return nil }
-        copy.frameLength = buffer.frameLength
-        let channels = Int(buffer.format.channelCount)
-        let frames = Int(buffer.frameLength)
-        if let source = buffer.floatChannelData, let target = copy.floatChannelData {
-            for channel in 0..<channels {
-                target[channel].update(from: source[channel], count: frames)
-            }
-            return copy
-        }
-        if let source = buffer.int16ChannelData, let target = copy.int16ChannelData {
-            for channel in 0..<channels {
-                target[channel].update(from: source[channel], count: frames)
-            }
-            return copy
-        }
-        return nil
     }
 
     /// Hält den Zeitversatz einer Sitzung, der erst nach dem Start feststeht.

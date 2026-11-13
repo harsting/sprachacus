@@ -127,13 +127,18 @@ struct RefinerChain {
         }
     }
 
-    func refine(_ raw: String, languageCode: String) async -> (text: String, refinerName: String) {
+    /// - Parameter onLateResult: Wird gerufen, wenn eine Korrektur erst nach
+    ///   dem Zeitlimit fertig wird. Eingefügt ist dann schon der Rohtext —
+    ///   die Korrektur soll trotzdem nicht verloren gehen.
+    func refine(_ raw: String, languageCode: String,
+                onLateResult: ((String, String) -> Void)? = nil) async -> (text: String, refinerName: String) {
         if Settings.shared.skipRefinementForShortText, Self.looksClean(raw) {
             return (raw, "ohne Korrektur (kurz)")
         }
         for refiner in refiners {
             guard await refiner.isAvailable() else { continue }
-            switch await Self.run(refiner, raw: raw, languageCode: languageCode) {
+            switch await Self.run(refiner, raw: raw, languageCode: languageCode,
+                                  onLateResult: onLateResult) {
             case .text(let cleaned):
                 if !cleaned.isEmpty { return (cleaned, refiner.name) }
             case .failed:
@@ -156,26 +161,58 @@ struct RefinerChain {
         case timedOut
     }
 
-    private static func run(_ refiner: TextRefiner, raw: String,
-                            languageCode: String) async -> Outcome {
+    private static func run(_ refiner: TextRefiner, raw: String, languageCode: String,
+                            onLateResult: ((String, String) -> Void)?) async -> Outcome {
         let limit = deadline(for: raw)
-        return await withTaskGroup(of: Outcome.self) { group in
-            group.addTask {
-                do {
-                    let result = try await refiner.refine(raw, languageCode: languageCode)
-                    return .text(RefinerPrompts.cleanOutput(result))
-                } catch {
-                    NSLog("Refiner \(refiner.name) failed: \(error.localizedDescription)")
-                    return .failed
+        // Bewusst eine freistehende Aufgabe: Sie läuft weiter, wenn das
+        // Zeitlimit zuschlägt. Nur so lässt sich die Korrektur hinterher noch
+        // in den Verlauf nachtragen, statt sie wegzuwerfen.
+        let work = Task<String?, Never> {
+            do {
+                return RefinerPrompts.cleanOutput(try await refiner.refine(raw, languageCode: languageCode))
+            } catch {
+                NSLog("Refiner \(refiner.name) failed: \(error.localizedDescription)")
+                return nil
+            }
+        }
+
+        let outcome: Outcome = await withCheckedContinuation { continuation in
+            let resumer = SingleResume(continuation)
+            Task {
+                let result = await work.value
+                resumer.finish(result.map { Outcome.text($0) } ?? .failed)
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(limit * 1_000_000_000))
+                resumer.finish(.timedOut)
+            }
+        }
+
+        if case .timedOut = outcome {
+            Task {
+                if let late = await work.value, !late.isEmpty {
+                    onLateResult?(late, refiner.name)
                 }
             }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(limit * 1_000_000_000))
-                return .timedOut
-            }
-            let first = await group.next() ?? .failed
-            group.cancelAll()
-            return first
+        }
+        return outcome
+    }
+
+    /// Lässt genau eine der beiden Seiten des Wettlaufs gewinnen.
+    private final class SingleResume: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Outcome, Never>?
+
+        init(_ continuation: CheckedContinuation<Outcome, Never>) {
+            self.continuation = continuation
+        }
+
+        func finish(_ outcome: Outcome) {
+            lock.lock()
+            let pending = continuation
+            continuation = nil
+            lock.unlock()
+            pending?.resume(returning: outcome)
         }
     }
 
@@ -195,10 +232,19 @@ struct RefinerChain {
 
     /// Wie lange auf die Korrektur gewartet wird, bevor der Rohtext eingefügt
     /// wird. Längerer Text darf länger brauchen.
-    /// Warm braucht die Korrektur gemessen 0,7 s (kurz) bis 1,2 s (1250
-    /// Zeichen). Das Limit liegt deutlich darüber, aber so niedrig, dass ein
-    /// kaltes Modell nicht die ganze Wartezeit verursacht.
+    /// Wie lange auf die Korrektur gewartet wird, bevor der Rohtext eingefügt
+    /// wird.
+    ///
+    /// Zwei verschiedene Erwartungen: Bei einem kurzen Satz soll es sofort
+    /// gehen — da ist ein kaltes Modell (gemessen 6–15 s) unzumutbar. Bei
+    /// einem langen Diktat rechnet man ohnehin mit ein paar Sekunden, und ein
+    /// abgeschnittener Durchlauf wäre viel ärgerlicher als das Warten.
+    /// Gemessene Zeiten bei warmem Modell: 580 Zeichen 5,9 s, 1030 Zeichen
+    /// 4,3 s, 2040 Zeichen 5,1 s. Das Limit liegt überall mindestens beim
+    /// Dreifachen.
     static func deadline(for raw: String) -> TimeInterval {
-        min(20, 1.5 + Double(raw.count) * 0.02)
+        let count = Double(raw.count)
+        if raw.count <= 200 { return 1.5 + count * 0.02 }
+        return min(60, 6 + count * 0.03)
     }
 }

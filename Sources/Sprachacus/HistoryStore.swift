@@ -63,16 +63,24 @@ final class HistoryStore: ObservableObject {
         load()
     }
 
+    @discardableResult
     func add(raw: String, refined: String, refinerName: String,
-             languageCode: String, kind: HistoryKind = .dictation) {
-        entries.insert(
-            HistoryEntry(raw: raw, refined: refined, refinerName: refinerName,
-                         languageCode: languageCode, kind: kind),
-            at: 0
-        )
+             languageCode: String, kind: HistoryKind = .dictation) -> HistoryEntry {
+        let entry = HistoryEntry(raw: raw, refined: refined, refinerName: refinerName,
+                                 languageCode: languageCode, kind: kind)
+        entries.insert(entry, at: 0)
         if entries.count > maxEntries {
             entries.removeLast(entries.count - maxEntries)
         }
+        save()
+        return entry
+    }
+
+    /// Trägt eine Korrektur nach, die erst nach dem Zeitlimit fertig wurde.
+    func addLateRefinement(_ text: String, refinerName: String, to id: UUID) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[index].refined = text
+        entries[index].refinerName = "\(refinerName) (nachgereicht)"
         save()
     }
 

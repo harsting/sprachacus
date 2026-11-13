@@ -200,11 +200,33 @@ final class DictationController {
                 switch mode {
                 case .dictation:
                     self.overlay.setPhase(.processing("Optimiere…"))
-                    let (refined, refinerName) = await RefinerChain.current().refine(raw, languageCode: languageCode)
+                    // Bei langen Diktaten dauert die Korrektur spürbar. Ein
+                    // mitlaufender Zähler zeigt, dass gearbeitet wird — sonst
+                    // wirkt die App hängengeblieben.
+                    let ticker = Task { @MainActor [weak self] in
+                        var seconds = 0
+                        while !Task.isCancelled {
+                            try? await Task.sleep(nanoseconds: 1_000_000_000)
+                            seconds += 1
+                            guard !Task.isCancelled, self?.state == .processing else { return }
+                            if seconds >= 3 { self?.overlay.setPhase(.processing("Optimiere… \(seconds) s")) }
+                        }
+                    }
+                    // Der Eintrag entsteht vor dem Einfügen, damit eine
+                    // verspätete Korrektur ihn noch ergänzen kann.
+                    let entry = HistoryStore.shared.add(raw: raw, refined: raw,
+                                                        refinerName: "…", languageCode: languageCode)
+                    let (refined, refinerName) = await RefinerChain.current().refine(
+                        raw, languageCode: languageCode,
+                        onLateResult: { late, name in
+                            Task { @MainActor in
+                                HistoryStore.shared.addLateRefinement(late, refinerName: name, to: entry.id)
+                            }
+                        })
+                    ticker.cancel()
                     guard !Task.isCancelled, self.state == .processing else { return }
                     NSLog("Refined via \(refinerName): \(refined.prefix(80))")
-                    HistoryStore.shared.add(raw: raw, refined: refined,
-                                            refinerName: refinerName, languageCode: languageCode)
+                    HistoryStore.shared.addLateRefinement(refined, refinerName: refinerName, to: entry.id)
                     self.paster.onFailure = { [weak self] reason in
                         self?.overlay.flash(.error(reason), duration: 2.5)
                     }

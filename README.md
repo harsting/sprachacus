@@ -203,6 +203,7 @@ Gemessen in der App auf einem MacBook Air (M-Reihe, macOS 26), kurzes Diktat von
 | Abschluss nach dem Stoppen | 355–650 ms | unverändert |
 | KI-Korrektur, Modell warm | 890–1000 ms | ~700 ms (vorgewärmte Sitzung) |
 | KI-Korrektur, Modell kalt | **6–15 Sekunden** | fällt beim App-Start an, nicht beim Diktat |
+| KI-Korrektur langer Texte (warm) | — | 6,3 s bei 1030 Zeichen, 8,6 s bei 2070, 9,1 s bei 2620 |
 
 Drei Hebel:
 
@@ -212,8 +213,13 @@ Drei Hebel:
 - **Das lokale Modell wird vorgewärmt** — beim App-Start, beim Beginn jeder Aufnahme und nach jeder
   Korrektur. Der Kaltstart kostet gemessen das Zehn- bis Zwanzigfache einer warmen Anfrage; diese
   Zeit vergeht jetzt im Hintergrund statt mit dem Cursor im Dokument.
-- **Zeitlimit für die Korrektur** (1,5 Sekunden plus 20 ms je Zeichen): Wird es überschritten, fügt
-  Sprachacus den Rohtext ein, statt weiter zu warten. Im Verlauf steht dann „Rohtext (Zeitlimit)".
+- **Zeitlimit für die Korrektur**, gestaffelt nach Länge: bis 200 Zeichen 1,5 s plus 20 ms je
+  Zeichen (ein kurzer Satz also rund 3 s), darüber 6 s plus 30 ms je Zeichen, höchstens 60 s. Ein
+  langes Diktat wird also nicht abgeschnitten — gemessen braucht die Korrektur bei warmem Modell
+  6,3 s für 1030 Zeichen, 8,6 s für 2070 und 9,1 s für 2620; das Limit liegt überall beim Vier- bis
+  Siebenfachen. Greift es doch, wird der Rohtext eingefügt („Rohtext (Zeitlimit)" im Verlauf), die
+  Korrektur läuft aber weiter und wird im Verlauf nachgetragen. Während der Korrektur zählt das
+  Overlay ab drei Sekunden die Wartezeit mit.
 
 Dazu optional unter Einstellungen → Tempo: **kurze, saubere Diktate ohne KI-Korrektur einfügen**.
 Apples Erkennung setzt Satzzeichen und Großschreibung bereits selbst; bei kurzen Sätzen ohne
